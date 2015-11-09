@@ -280,24 +280,27 @@ void FoldedGraph::EnsurePath(
   //halves is of required weight
 
   if (w.Empty()) {
-    return EnsureEpsilon(origin, terminus, weight, &modulus_);
+    EnsureEpsilon(origin, terminus, weight, &modulus_);
+  } else {
+    auto from_origin = w;
+    from_origin.PopBack(static_cast<Word::size_type>(from_origin.size() / 2));
+
+    auto from_terminus = w;
+    from_terminus.PopFront(from_origin.size());
+    from_terminus.Invert();
+
+    auto middle = from_origin.GetBack();
+    from_origin.PopBack();
+
+    auto origin_path = PushWord(from_origin, origin);
+    auto terminus_path = PushWord(from_terminus, terminus);
+
+    EnsureEdge(middle, &origin_path.terminus(), &terminus_path.terminus(),
+        weight - (origin_path.weight() - terminus_path.weight()), &modulus_);
   }
-
-  auto from_origin = w;
-  from_origin.PopBack(static_cast<Word::size_type>(from_origin.size() / 2));
-
-  auto from_terminus = w;
-  from_terminus.PopFront(from_origin.size());
-  from_terminus.Invert();
-
-  auto middle = from_origin.GetBack();
-  from_origin.PopBack();
-
-  auto origin_path = PushWord(from_origin, origin);
-  auto terminus_path = PushWord(from_terminus, terminus);
-
-  return EnsureEdge(middle, &origin_path.terminus(), &terminus_path.terminus(),
-      weight - (origin_path.weight() - terminus_path.weight()), &modulus_);
+  if (root_->IsMerged()) {
+    root_ = &root_->Parent();
+  }
 }
 
 template

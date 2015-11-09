@@ -5,6 +5,9 @@
 #include "folded_graph.h"
 
 #include "internal/naive_folded_graph.h"
+#include "internal/cycles.h"
+#include "internal/cycles_examples.h"
+#include "internal/folded_graph_internal_checks.h"
 
 namespace crag {
 
@@ -266,32 +269,6 @@ TEST(FoldedGraph, PushCycleEmpty) {
   EXPECT_EQ(1, g.modulus().modulus());
 }
 
-struct Cycle
-{
-  std::pair<Word, Weight> data_;
-
-  Cycle(const char* word, Weight weight)
-      : data_(Word(word), weight) {
-  }
-
-  Cycle(Word word, Weight weight)
-      : data_(std::move(word), std::move(weight)) {
-  }
-
-  const Word& word() const {
-    return data_.first;
-  }
-
-  Weight weight() const {
-    return data_.second;
-  }
-};
-
-std::ostream& operator<<(std::ostream& out, const Cycle& c) {
-  return out << "{ " << c.word() << " , " << c.weight() << " }";
-}
-
-typedef std::pair<std::vector<Cycle>, Weight> PushReadCyclesParam;
 class GraphsPushReadCycles: public ::testing::TestWithParam<PushReadCyclesParam>
 {
 };
@@ -353,35 +330,6 @@ TEST_P(GraphsPushReadCycles, NaiveFoldedGraph2PushRead) {
   }
 }
 
-PushReadCyclesParam push_read_cycles_params[] = {
-  {{{"xyxYXY", 1}, {"X", 0}}, 0},
-  {{{"xyxYXY", 1}, {"x", 0}}, 0},
-  {{{"xyxYXY", 1}, {"y", 0}}, 0},
-  {{{"xxY", 1}, {"y", 0}}, 0},
-  {{{"xyxYXY", 1}, {"yy", 0}}, 0},
-  {{{"x", 1}, {"X", 0}}, 1},
-  {{{"Yx", 1}, {"XyxxYxY", 0}, {"yX", 0}}, 1},
-  {{{"yXY", 1}, {"YYXYXyyyx", 0}, {"XXY", 0}}, 1},
-  {{{"yXY", 1}, {"YYXYXyyyx", 0}, {"XXY", 0}}, 1},
-  {{{"yX", 1}, {"xYxY", 1}, {"XYXyX", 1}}, 3},
-  {{{"YY", 1}, {"yy", 0}, {"YXY", 1}}, 1},
-  {{{"xxyXYY", 1}, {"XY", 0}, {"xyxyx", 0}}, 1},
-  {{{"yXyy", 0}, {"XYY", 0}, {"Xyy", 0}}, 0},
-  {{{"yyxY", 0}, {"yyXy", 0}, {"yxY", 0}}, 0},
-  {{{"yXyxY", 0}, {"xxY", 0}, {"yXXX", 0}}, 0},
-  {{{"xyx", 0}, {"xyyyxYXY", 0}, {"XYx", 0}}, 0},
-  {{{"yxYxYxy", 0}, {"YYYYxYx", 0}, {"Xyyyy", 0}}, 0},
-  {{{"YxY", 0}, {"YYxy", 1}, {"YY", 0}}, 2},
-  {{{"yyy", 0}, {"YYYY", 1}, {"yyy", 1}}, 1},
-  {{{"yx", 1}, {"xyx", 0}}, 0},
-  {{{"xYYY", 1}, {"xY", 0}, {"Xyx", 0}}, 0},
-  {{{"xx", 0}, {"XyXyy", 1}, {"YX", 1}}, 8},
-  {{{"x", 1}, {"X", 0}}, 1},
-  {{{"Yx", 1}, {"XyxxYxY", 0}, {"yX", 0}}, 1},
-  {{{"yXY", 1}, {"YYXYXyyyx", 0}, {"XXY", 0}}, 1},
-  {{{"xxyXYY", 1}, {"XY", 0}, {"xyxyx", 0}}, 1},
-};
-
 INSTANTIATE_TEST_CASE_P(Examples, GraphsPushReadCycles, ::testing::ValuesIn(push_read_cycles_params));
 
 using Clock = std::chrono::steady_clock;
@@ -436,9 +384,11 @@ struct NormalStressFolding {
     for (auto&& w : words) {
       g.PushCycle(w.word(), &g.root(), w.weight());
 
-//#ifndef NDEBUG
-//      g.CheckIsOk();
-//#endif
+#ifndef NDEBUG
+      static crag::FoldedGraphInternalChecks checks;
+
+     EXPECT_TRUE(checks.Check(g));
+#endif
     }
   }
 

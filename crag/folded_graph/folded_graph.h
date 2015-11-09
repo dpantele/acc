@@ -231,6 +231,7 @@ class FoldedGraph
     //if merged_ is true, the vertex should never have any edges in and out
     bool merged_ = false;
 #endif
+    friend class FoldedGraphInternalChecks;
   };
 
   FoldedGraph()
@@ -407,6 +408,8 @@ class FoldedGraph
   Vertex* root_; //!< We need explicit root since vertices_.front() may be merged
 
   Modulus modulus_;
+
+  friend class FoldedGraphInternalChecks;
 };
 
 extern template
