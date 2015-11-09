@@ -159,6 +159,9 @@ private:
 };
 
 void CWord::CyclicLeftShift(size_type shift) {
+  if (Empty()) {
+    return;
+  }
   shift %= size_;
   auto left_part = (letters_ >> (kLetterShift * (size_ - shift)));
   letters_ <<= kLetterShift * shift;

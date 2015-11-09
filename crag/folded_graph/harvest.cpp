@@ -60,19 +60,20 @@ void Harvest(
       return *terminus_;
     }
 
-    bool Advance(const FoldedGraph::ConstEdge& edge) {
+    bool Advance(const FoldedGraph::ConstEdge& edge, const Modulus& modulus) {
       if (!edge) {
         return false;
       }
 
       terminus_ = &edge.terminus();
       weight_ += edge.weight();
+      weight_ = modulus.Reduce(weight_);
       word_.PushBack(edge.label());
       return true;
     }
   };
 
-  auto HarvestPaths = [](size_t max_length, const Vertex& v0, auto path_action) {
+  auto HarvestPaths = [&graph](size_t max_length, const Vertex& v0, auto path_action) {
     std::deque<Path> active_paths;
     active_paths.push_back(Path{&v0, 0, Word()});
 
@@ -91,7 +92,7 @@ void Harvest(
         }
 
         active_paths.push_back(current_path);
-        active_paths.back().Advance(edge);
+        active_paths.back().Advance(edge, graph.modulus());
       }
     }
   };

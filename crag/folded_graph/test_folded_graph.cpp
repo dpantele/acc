@@ -277,7 +277,8 @@ FoldedGraph GetFolded(const std::vector<Cycle>& cycles) {
   FoldedGraph g;
   for (auto&& cycle : cycles) {
     g.PushCycle(cycle.word(), &g.root(), cycle.weight());
-    //g.CheckIsOk();
+    auto result = FoldedGraphInternalChecks::Check(g);
+    EXPECT_TRUE(result);
   }
 
   return g;
@@ -287,6 +288,10 @@ using Path = FoldedGraph::Path;
 
 TEST_P(GraphsPushReadCycles, FoldedGraphPushRead) {
   auto g = GetFolded(GetParam().first);
+
+  if (HasFatalFailure()) {
+    return;
+  }
 
   EXPECT_EQ(GetParam().second, g.modulus().modulus());
 
@@ -305,7 +310,8 @@ TEST_P(GraphsPushReadCycles, FoldedGraphPushRead) {
 naive::NaiveFoldedGraph2 GetNaiveFolded(const std::vector<Cycle>& cycles) {
   naive::NaiveFoldedGraph2 g;
   for(auto&& cycle : cycles) {
-    g.PushCycle(cycle.word(), &g.root(), cycle.weight());
+    Word w(cycle.word());
+    g.PushCycle(g.root(), &w, cycle.weight());
   }
 
   g.Fold();
@@ -322,7 +328,7 @@ TEST_P(GraphsPushReadCycles, NaiveFoldedGraph2PushRead) {
   for(auto&& cycle : GetParam().first) {
     Weight w = 0;
     Word to_read(cycle.word());
-    auto& end = g.root().ReadWord(&to_read, &w);
+    auto end = g.ReadWord(g.root(), &to_read, &w);
 
     EXPECT_EQ(g.root(), end);
     EXPECT_EQ(0, to_read.size());
@@ -344,7 +350,8 @@ struct NaiveStressFolding {
 
   NaiveStressFolding(const std::vector<Cycle>& words) {
     for (auto&& w : words) {
-      g.PushCycle(w.word(), &g.root(), w.weight());
+      Word word(w.word());
+      g.PushCycle(g.root(), &word, w.weight());
     }
     g.Fold();
   }
@@ -353,10 +360,10 @@ struct NaiveStressFolding {
     auto to_read = c.word();
     Weight read_weight = {};
 
-    auto& stopped_at = g.root().ReadWord(&to_read, &read_weight);
+    auto stopped_at = g.ReadWord(g.root(), &to_read, &read_weight);
 
     if (stopped_at != g.root()) {
-      return ::testing::AssertionFailure() << "stopped not on in root: " << stopped_at.id_;
+      return ::testing::AssertionFailure() << "stopped not on in root: " << stopped_at;
     }
 
     if (!to_read.Empty()) {
@@ -385,9 +392,7 @@ struct NormalStressFolding {
       g.PushCycle(w.word(), &g.root(), w.weight());
 
 #ifndef NDEBUG
-      static crag::FoldedGraphInternalChecks checks;
-
-     EXPECT_TRUE(checks.Check(g));
+     EXPECT_TRUE(FoldedGraphInternalChecks::Check(g));
 #endif
     }
   }
@@ -448,6 +453,10 @@ TYPED_TEST(GraphFolding, StressTest) {
     }
 
     auto test_impl = TypeParam(words);
+
+    if (this->HasFatalFailure()) {
+      return;
+    }
 
     for (auto&& w : words) {
       ASSERT_TRUE(test_impl.ReadWord(w)) << "Pushed " << ::testing::PrintToString(words) << ", fail on " << w;

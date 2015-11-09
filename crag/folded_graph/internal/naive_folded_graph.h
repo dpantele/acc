@@ -2,6 +2,8 @@
 #ifndef CRAG_NAIVE_FOLDED_GRAPH2_H_
 #define CRAG_NAIVE_FOLDED_GRAPH2_H_
 
+#include <limits>
+
 #include <array>
 #include <cassert>
 #include <cstdint>
@@ -31,7 +33,7 @@ int64_t WeightMod(int64_t a, int64_t b) {
 
 }
 
-//! Naive and slow implementatoin of FoldedGraph2
+//! Naive and slow implementation of FoldedGraph2
 class NaiveFoldedGraph2 {
  public:
   typedef CWord Word;
@@ -40,264 +42,292 @@ class NaiveFoldedGraph2 {
   static const size_t kAlphabetSize = Word::kAlphabetSize;
 
   typedef Word::Letter Label; //!< Labels of edges
-
   typedef int64_t Weight;      //!< Weight of edges
 
-  //types for the public interface
-  struct Vertex;
-  struct Edge;
-
-  using VertexData = std::multimap<Label, std::unique_ptr<Edge>>;
-  using EdgeIterator = VertexData::iterator;
+  using Vertex = uint64_t;
 
   struct Edge {
-    Vertex& origin_;
-    Vertex& endpoint_;
-    Weight w_;
-    Label l_;
-
-    EdgeIterator edge_position_;
-    EdgeIterator inverse_position_;
-
-    Edge& inverse() {
-      return *inverse_position_->second;
-    }
-
-    Edge(Vertex& o, Vertex& e, Weight w, const Label& l) : origin_(o), endpoint_(e), w_(w), l_(l) { }
-
-    void Init(EdgeIterator edge_position, EdgeIterator inverse_position) {
-      assert(inverse_position->second->endpoint_ == origin_);
-      assert(inverse_position->second->origin_ == endpoint_);
-      assert(inverse_position->second->w_ == -w_);
-      assert(inverse_position->second->l_ == l_.Inverse());
-
-      edge_position_ = edge_position;
-      inverse_position_ = inverse_position;
-      inverse_position->second->edge_position_ = inverse_position;
-      inverse_position->second->inverse_position_ = edge_position;
-    }
-
-    bool Fold(Edge* e, Weight* modulus);
-  };
-
-
-  struct Vertex {
-    std::shared_ptr<VertexData> edges_;
-    size_t id_ = 0;
-
-    Vertex* next_ = nullptr;
-    Vertex* first_;
-
-    Vertex(const Vertex&) = delete;
-    Vertex(Vertex&&) = delete;
-    Vertex()
-      : edges_(std::make_shared<VertexData>())
-      , first_(this)
+    std::tuple<Vertex, Label, Vertex> data_;
+    template<typename ... Args>
+    Edge(Args&&... args)
+        : data_(std::forward<Args>(args)...)
     { }
 
-    void ConnectTo(Vertex* e, const Label& l, Weight w) {
-      auto edge = edges_->emplace(l, std::unique_ptr<Edge>(new Edge(*this, *e, w, l)));
-      auto inverse = e->edges_->emplace(l.Inverse(), std::unique_ptr<Edge>(new Edge(*e, *this, -w, l.Inverse())));
-
-      edge->second->Init(edge, inverse);
+    bool operator<(const Edge& other) const {
+      return data_ < other.data_;
     }
 
-    void ShiftWeight(Weight d) {
-      for (auto&& edge : *edges_) {
-        edge.second->w_ += d;
-        edge.second->inverse().w_ -= d;
-      }
+    Edge Inverse() const {
+      return Edge(std::get<2>(data_), std::get<1>(data_).Inverse(), std::get<0>(data_));
+    }
+    Vertex from() const {
+      return std::get<0>(data_);
+    }
+    Label label() const {
+      return std::get<1>(data_);
+    }
+    Vertex to() const {
+      return std::get<2>(data_);
     }
 
-    void ReplaceWith(Vertex* v) {
-      assert(*this != *v);
-      for (auto&& edge : *edges_) {
-        auto moved_edge = v->edges_->insert(std::move(edge));
-        moved_edge->second->Init(moved_edge, moved_edge->second->inverse_position_);
-      }
-
-      Vertex* eq = first_;
-      Vertex* last = first_;
-      while (eq != nullptr) {
-        eq->edges_ = v->edges_;
-        last = eq;
-        eq = eq->next_;
-      }
-
-      last->next_ = v->first_;
-      eq = v->first_;
-      while (eq != nullptr) {
-        eq->first_ = first_;
-        eq = eq->next_;
-      }
+    static Edge min_edge(Vertex v) {
+      return Edge(v, 0, std::numeric_limits<Vertex>::min());
     }
-
-    const Vertex& ReadWord(Word* to_read, Weight* read_weight) const {
-      if (to_read->Empty()) {
-        return *this;
-      }
-
-      auto edges = edges_->equal_range(to_read->GetFront());
-      if (edges.first == edges.second) {
-        return *this;
-      }
-      if (std::next(edges.first) != edges.second) {
-        throw std::runtime_error("Can't traverse non-folded graphs");
-      }
-      const Edge& edge = *edges.first->second;
-      *read_weight += edge.w_;
-      to_read->PopFront();
-      return edge.endpoint_.ReadWord(to_read, read_weight);
+    static Edge max_edge(Vertex v) {
+      return Edge(v, kAlphabetSize * 2 - 1, std::numeric_limits<Vertex>::max());
     }
-
-    bool operator==(const Vertex& rhs) const {
-      return edges_ == rhs.edges_;
+    static Edge min_edge(Vertex v, Label l) {
+      return Edge(v, l, std::numeric_limits<Vertex>::min());
     }
-
-    bool operator!=(const Vertex& rhs) const {
-      return edges_ != rhs.edges_;
-    }
-
-    void Erase(Edge* e) {
-      assert(e->origin_ == *this);
-      //first, remove inverse
-      assert(e->inverse_position_->second->origin_ == e->endpoint_);
-
-      e->endpoint_.edges_->erase(e->inverse_position_);
-      //then remove e
-      edges_->erase(e->edge_position_);
+    static Edge max_edge(Vertex v, Label l) {
+      return Edge(v, l, std::numeric_limits<Vertex>::max());
     }
   };
 
-  std::deque<Vertex> vertices_;
+  std::multimap<Edge, Weight> edges_;
+
+
+  static Vertex GetOrigin(const std::pair<Edge, Weight>& e) {
+    return e.first.from();
+  }
+  static Label GetLabel(const std::pair<Edge, Weight>& e) {
+    return e.first.label();
+  }
+  static Vertex GetTerminus(const std::pair<Edge, Weight>& e) {
+    return e.first.to();
+  }
+  static Vertex GetWeight(const std::pair<Edge, Weight>& e) {
+    return e.second;
+  }
+
+  Vertex last_vertex_ = 0;
   Weight modulus_ = 0;
 
-  NaiveFoldedGraph2()
-    : vertices_(1)
-  {
-    root().id_ = 1;
+  Vertex root() const {
+    return 0;
   }
 
-  Vertex& root() {
-    return vertices_[0];
+  Vertex ReadWord(Vertex from, Word* to_read, Weight* read_weight) const {
+    if (to_read->Empty()) {
+      return from;
+    }
+    auto next = to_read->GetFront();
+    to_read->PopFront();
+
+    auto edge = edges_.lower_bound(Edge::min_edge(from, next));
+    *read_weight += GetWeight(*edge);
+    return ReadWord(GetTerminus(*edge), to_read, read_weight);
   }
 
-  const Vertex& root() const {
-    return vertices_[0];
+  Vertex AddEdge(Vertex from, Label l, Vertex to, Weight w) {
+    edges_.emplace(Edge(from, l, to), w);
+    edges_.emplace(Edge(to, l.Inverse(), from), -w);
+    return to;
   }
 
-  Vertex& PushVertex() {
-    vertices_.emplace_back();
-    vertices_.back().id_ = vertices_.size();
-    return vertices_.back();
+  Vertex AddEdge(Vertex from, Label l, Weight w) {
+    return AddEdge(from, l, ++last_vertex_, w);
   }
 
-  void PushCycle(Word word, Vertex* v, Weight w = 0) {
-    auto current = v;
-    while (word.size() > 1) {
-      auto& next = PushVertex();
-      current->ConnectTo(&next, word.GetFront(), 0);
-      current = &next;
-      word.PopFront();
+
+  Vertex PushWord(Vertex from, Word* to_push, Weight push_weight) {
+    if (to_push->Empty()) {
+      return from;
     }
 
-    if (word.size() > 0) {
-      current->ConnectTo(v, word.GetFront(), w);
-    }
+    auto next = to_push->GetFront();
+    to_push->PopFront();
+
+    return PushWord(AddEdge(from, next, push_weight), to_push, 0);
   }
 
-  void Fold() {
-    bool no_more_folds = false;
+  Vertex CombineVertices(Vertex parent, Vertex child) {
+    auto current_edge = edges_.begin();
+    while (current_edge != edges_.end()) {
+      if (GetOrigin(*current_edge) == child || GetTerminus(*current_edge) == child) {
+        auto from = (GetOrigin(*current_edge) == child ? parent : GetOrigin(*current_edge));
+        auto to = (GetTerminus(*current_edge) == child ? parent : GetTerminus(*current_edge));
 
-//    std::cout << "Before fold: \n";
-//    PrintTo(&std::cout);
-
-    while (!no_more_folds) {
-      no_more_folds = true;
-
-      for (auto&& vertex : vertices_) {
-        auto e1 = vertex.edges_->begin();
-
-        if (e1 == vertex.edges_->end()) {
-          continue;
-        }
-
-        auto e2 = std::next(e1);
-
-        while (e2 != vertex.edges_->end()) {
-          if (e1->second->Fold(e2->second.get(), &modulus_)) {
-            no_more_folds = false;
-
-//            std::cout << "Folded in " << vertex.id_ << ":\n";
-//            PrintTo(&std::cout);
-            break;
-          }
-
-          e1 = e2;
-          e2 = std::next(e1);
-        }
-
-        if (!no_more_folds) {
-          break;
-        }
+        edges_.emplace(Edge(from, GetLabel(*current_edge), to), GetWeight(*current_edge));
+        current_edge = edges_.erase(current_edge);
+      } else {
+        ++current_edge;
       }
     }
 
+    return parent;
   }
 
-  void PrintTo(std::ostream* out) {
-    std::map<VertexData*, size_t> ids_;
+  bool WeightsEqual(Weight w1, Weight w2) const {
+    return WeightMod(w1- w2, modulus_) == 0;
+  }
 
-    for (auto&& v : vertices_) {
-      *out << "V" << v.id_ << ": ";
-      auto id_seen = ids_.emplace(v.edges_.get(), v.id_);
-      if (!id_seen.second) {
-        *out << "seen as " << id_seen.first->second << "; ";
+  void EnsureEqual(Weight w1, Weight w2) {
+    if (!WeightsEqual(w1, w2)) {
+      modulus_ = std::abs(GCD(modulus_, WeightMod(w1- w2, modulus_)));
+    }
+  }
+
+  Vertex PushCycle(Vertex root, Word to_push, Weight weight) {
+    return PushCycle(root, &to_push, weight);
+  }
+
+  Vertex PushCycle(Vertex root, Word* to_push, Weight weight) {
+    if (to_push->Empty()) {
+      EnsureEqual(weight, 0);
+      return root;
+    }
+
+    auto v = PushWord(root, to_push, weight);
+    return CombineVertices(root, v);
+  }
+
+  void ShiftWeight(Vertex v, Weight shift) {
+    auto edge = std::make_pair(
+        edges_.lower_bound(Edge::min_edge(v)),
+        edges_.upper_bound(Edge::max_edge(v))
+    );
+
+    while (edge.first != edge.second) {
+      auto current_range = edges_.equal_range(edge.first->first);
+      while (current_range.first != current_range.second) {
+        current_range.first->second += shift;
+        ++current_range.first;
       }
+      auto inverse_range = edges_.equal_range(edge.first->first.Inverse());
+      while (inverse_range.first != inverse_range.second) {
+        inverse_range.first->second -= shift;
+        ++inverse_range.first;
+      }
+      edge.first = current_range.second;
+    }
+  }
 
-      for (auto&& e : *v.edges_) {
-        if (!e.second) {
-          *out << "nil(" << e.first << "), ";
+  bool FoldOne() {
+    if (edges_.size() < 1) {
+      return false;
+    }
+
+    auto current = edges_.begin();
+    auto next = std::next(current);
+
+    while (next != edges_.end()) {
+      if (GetOrigin(*current) == GetOrigin(*next) && GetLabel(*current) == GetLabel(*next)) {
+        if (GetTerminus(*current) == GetTerminus(*next)) {
+          //next line does not change modulus if weights are equal
+          EnsureEqual(GetWeight(*current), GetWeight(*next));
+          next = edges_.erase(next);
         } else {
-          *out << e.second->origin_.id_ << "-" << e.second->l_ << e.second->w_ << ">" << e.second->endpoint_.id_ <<
-                                                                                         ", ";
+          //w2 = w1 - (w1 - w2)
+          ShiftWeight(GetTerminus(*current), WeightMod(GetWeight(*current) - GetWeight(*next), modulus_));
+          assert(WeightsEqual(GetWeight(*current), GetWeight(*next)));
+
+          CombineVertices(GetTerminus(*current), GetTerminus(*next));
+          return true;
         }
+      } else {
+        ++current;
+        ++next;
       }
-      *out << "\n";
     }
 
-    *out << std::flush;
-  }
-
-};
-
-inline bool NaiveFoldedGraph2::Edge::Fold(Edge* e, NaiveFoldedGraph2::Weight* modulus) {
-  assert(origin_ == e->origin_);
-
-  if (l_ != e->l_) {
     return false;
   }
 
-  auto weight_diff = WeightMod(w_ - e->w_, *modulus);
+  void Fold() {
+    while(FoldOne()) { }
+  }
 
-  if (endpoint_ != e->endpoint_) {
-    endpoint_.ShiftWeight(weight_diff);
-    e->endpoint_.ReplaceWith(&endpoint_);
-  } else {
-    *modulus = GCD(*modulus, weight_diff);
-    if (*modulus < 0) {
-      *modulus *= -1;
+
+
+
+  void Harvest(size_t k, Vertex v1, Vertex v2, Weight weight, std::vector<Word>* result) const {
+    std::deque<std::tuple<Vertex, Word, Weight>> current_path = {std::make_tuple(v1, Word{ }, 0)};
+
+    while (!current_path.empty()) {
+      Vertex v;
+      Word w;
+      Weight c;
+      std::tie(v, w, c) = current_path.front();
+      current_path.pop_front();
+      if (v == v2 && (WeightsEqual(c, weight))) {
+        if (v1 != v2 || (w.Empty() || w.GetFront() != w.GetBack().Inverse())) {
+          result->push_back(w);
+        }
+      }
+
+      if (w.size() >= k) {
+        continue;
+      }
+
+      auto v_edges = std::make_pair(
+          edges_.lower_bound(Edge::min_edge(v)),
+          edges_.upper_bound(Edge::max_edge(v))
+      );
+
+      while (v_edges.first != v_edges.second) {
+        auto& edge = *v_edges.first;
+        if (!w.Empty() && w.GetBack() == GetLabel(edge).Inverse()) {
+          ++v_edges.first;
+          continue;
+        }
+        Word next_word = w;
+        next_word.PushBack(GetLabel(edge));
+        current_path.emplace_back(GetTerminus(edge), next_word, c + GetWeight(edge));
+
+        ++v_edges.first;
+      }
     }
   }
 
-  assert(WeightMod(w_ - e->w_, *modulus) == 0);
+  std::vector<Word> Harvest(size_t k, Vertex v1, Vertex v2, Weight weight = 0) const {
+    std::vector<Word> result;
+    Harvest(k, v1, v2, weight, &result);
+    std::sort(result.begin(), result.end());
+    auto unique_end = std::unique(result.begin(), result.end());
+    result.erase(unique_end, result.end());
+    return result;
+  }
 
-  //ok, now remove inverse of e and e
-  origin_.Erase(e);
+  std::vector<Word> Harvest(size_t k, Weight w) const {
+    std::vector<Word> result;
+    for(auto v = 0u; v <= last_vertex_; ++v) {
+      Harvest(k, v, v, w, &result);
+    }
+    std::sort(result.begin(), result.end());
+    auto unique_end = std::unique(result.begin(), result.end());
+    result.erase(unique_end, result.end());
+    return result;
+  }
+};
 
-  return true;
-}
-
+//inline bool NaiveFoldedGraph2::Edge::Fold(Edge* e, NaiveFoldedGraph2::Weight* modulus) {
+//  assert(origin_ == e->origin_);
+//
+//  if (l_ != e->l_) {
+//    return false;
+//  }
+//
+//  auto weight_diff = WeightMod(w_ - e->w_, *modulus);
+//
+//  if (endpoint_ != e->endpoint_) {
+//    endpoint_.ShiftWeight(weight_diff);
+//    e->endpoint_.ReplaceWith(&endpoint_);
+//  } else {
+//    *modulus = GCD(*modulus, weight_diff);
+//    if (*modulus < 0) {
+//      *modulus *= -1;
+//    }
+//  }
+//
+//  assert(WeightMod(w_ - e->w_, *modulus) == 0);
+//
+//  //ok, now remove inverse of e and e
+//  origin_.Erase(e);
+//
+//  return true;
+//}
+//
 } //namespace naive
 
 } //namespace crag
