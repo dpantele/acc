@@ -4,25 +4,35 @@
 
 #include <vector>
 #include "folded_graph.h"
+#include "modulus.h"
 
 namespace crag {
 
-FoldedGraph::Edge FoldedGraph::Vertex::edge(crag::FoldedGraph::Label l) const {
+FoldedGraph::Vertex::const_iterator::EdgeDataAccess FoldedGraph::Vertex::edge(crag::FoldedGraph::Label l) const {
   assert(!this->epsilon_);
   assert(!edges_[l.AsInt()].terminus_ || !edges_[l.AsInt()].terminus_->epsilon_);
-  return edges_[l.AsInt()];
+  return {edges_.begin() + l.AsInt(), l};
 }
 
-void FoldedGraph::Vertex::Combine(FoldedGraph::Vertex* other, Weight shift) {
+FoldedGraph::Vertex::iterator::EdgeDataAccess FoldedGraph::Vertex::edge(crag::FoldedGraph::Label l) {
+  assert(!this->epsilon_);
+  assert(!edges_[l.AsInt()].terminus_ || !edges_[l.AsInt()].terminus_->epsilon_);
+  return {edges_.begin() + l.AsInt(), l};
+}
+
+
+void FoldedGraph::Vertex::Combine(FoldedGraph::Vertex* other, Weight this_shift, Modulus* modulus) {
   std::vector<Vertex*> merged; //!< Recently merged vertices
 
-  merged.push_back(Merge(this, other, shift));
+  this_shift = modulus->Reduce(this_shift);
+  merged.push_back(Merge(this, other, this_shift));
 
   while (!merged.empty()) {
     auto child_vertex = merged.back();
     merged.pop_back();
 
     assert(child_vertex->epsilon_);
+    assert(!child_vertex->merged_);
 
     auto edge_to_root = FollowEdge(child_vertex->epsilon_);
     auto child_shift = edge_to_root.weight_;
@@ -31,7 +41,7 @@ void FoldedGraph::Vertex::Combine(FoldedGraph::Vertex* other, Weight shift) {
     auto root_edge_iter = root_vertex->edges_.begin();
     Label label(0);
 
-    for (Edge child_edge : child_vertex->edges_) {
+    for (EdgeData child_edge : child_vertex->edges_) {
       if (child_edge) {
         //remove edge from this vertex
         //it will be presented in the root anyways
@@ -44,21 +54,22 @@ void FoldedGraph::Vertex::Combine(FoldedGraph::Vertex* other, Weight shift) {
           //while travelling from child to root, so only child_edge.weight_ - child_shift
           //is left
 
-          root_vertex->AddEdge(label, child_edge.terminus_, child_edge.weight_ - child_shift);
+          root_vertex->AddEdge(label, child_edge.terminus_, modulus->Reduce(child_edge.weight_ - child_shift));
         } else {
           //here we will have to merge two terminates
           child_edge = FollowEdge(child_edge);
-          Edge root_edge = FollowEdge(*root_edge_iter);
+          EdgeData root_edge = FollowEdge(*root_edge_iter);
 
           //assume there was a path Child->ChildTerminus of weight child_edge.weight
           //now there is a path Child->Root->RootTerminus->ChildTerminus
           //the total weight of that path is child_shift + root_edge.weight_ + termini_shift, should be equal to child_edge
 
-          auto termini_shift = child_edge.weight_ - child_shift - root_edge.weight_;
+          auto termini_shift = modulus->Reduce(child_edge.weight_ - child_shift - root_edge.weight_);
 
           if (child_edge.terminus_ == root_edge.terminus_) {
             //there is no other way to make termini_shift == 0
             //other than change modulus_
+            modulus->EnsureEqual(termini_shift, 0);
           } else {
             //termini shift in the formula above is for root_terminus->child_terminus
             merged.push_back(Merge(root_edge.terminus_, child_edge.terminus_, termini_shift));
@@ -68,6 +79,9 @@ void FoldedGraph::Vertex::Combine(FoldedGraph::Vertex* other, Weight shift) {
       ++label;
       ++root_edge_iter;
     }
+#ifndef NDEBUG
+    child_vertex->merged_ = true;
+#endif
   }
 }
 
@@ -77,7 +91,10 @@ void FoldedGraph::Vertex::Combine(FoldedGraph::Vertex* other, Weight shift) {
  *
  * A non-root vertex chosen is returned then.
  */
-FoldedGraph::Vertex* crag::Merge(FoldedGraph::Vertex* v1, FoldedGraph::Vertex* v2, FoldedGraph::Weight v1_shift) {
+FoldedGraph::Vertex* FoldedGraph::Vertex::Merge(
+    FoldedGraph::Vertex* v1
+    , FoldedGraph::Vertex* v2
+    , FoldedGraph::Weight v1_shift) {
   //Merge should be called only on the root of trees
   assert(!v1->epsilon_);
   assert(!v2->epsilon_);
@@ -100,8 +117,8 @@ FoldedGraph::Vertex* crag::Merge(FoldedGraph::Vertex* v1, FoldedGraph::Vertex* v
   }
 }
 
-FoldedGraph::Edge crag::FollowEdge(const FoldedGraph::Edge& e) {
-  FoldedGraph::Edge result(e);
+FoldedGraph::EdgeData FoldedGraph::Vertex::FollowEdge(const FoldedGraph::EdgeData& e) {
+  FoldedGraph::EdgeData result(e);
 
   if (!result.terminus_->epsilon_) {
     return result;
@@ -134,8 +151,8 @@ FoldedGraph::Edge crag::FollowEdge(const FoldedGraph::Edge& e) {
 void FoldedGraph::Vertex::AddEdge(FoldedGraph::Label l, Vertex* terminus, FoldedGraph::Weight w) {
   assert(!edges_[l.AsInt()]);
   assert(!terminus->edges_[l.Inverse().AsInt()]);
-  assert(!this->epsilon_);
-  assert(!terminus->epsilon_);
+  assert(!this->merged_);
+  assert(!terminus->merged_);
 
   edges_[l.AsInt()].terminus_ = terminus;
   edges_[l.AsInt()].weight_ = w;
@@ -145,15 +162,162 @@ void FoldedGraph::Vertex::AddEdge(FoldedGraph::Label l, Vertex* terminus, Folded
 }
 
 void FoldedGraph::Vertex::RemoveEdge(FoldedGraph::Label l) {
-  Edge& edge = edges_[l.AsInt()];
+  EdgeData& edge = edges_[l.AsInt()];
   assert(edge);
   auto terminus = edge.terminus_;
-  Edge& inverse = terminus->edges_[l.Inverse().AsInt()];
+  EdgeData& inverse = terminus->edges_[l.Inverse().AsInt()];
   assert(inverse);
   assert(inverse.terminus_ == this);
 
-  edge = Edge{};
-  inverse = Edge{};
+  edge = EdgeData{};
+  inverse = EdgeData{};
 }
+
+void FoldedGraph::Combine(FoldedGraph::Vertex* v1, FoldedGraph::Vertex* v2, FoldedGraph::Weight v1_shift) {
+  v1->Combine(v2, v1_shift, &modulus_);
+  if (root_->IsMerged()) {
+    root_ = &(root_->Parent());
+  }
+}
+
+template <typename Path>
+Path ReadWord(
+    const FoldedGraph::Word& w, decltype(std::declval<Path>().origin()) origin, CWord::size_type length_limit
+    , const Modulus& modulus) {
+  auto current_vertex = &origin;
+  auto to_read = w;
+  FoldedGraph::Weight current_weight = 0;
+
+  while(length_limit > 0) {
+    --length_limit;
+    auto next_edge = current_vertex->edge(to_read.GetFront());
+    if (!next_edge) {
+      break;
+    }
+
+    to_read.PopFront();
+
+    current_vertex = &next_edge.terminus();
+    current_weight += next_edge.weight();
+  }
+
+  return Path(origin, *current_vertex, modulus.Reduce(current_weight), std::move(to_read));
+}
+
+FoldedGraph::Path FoldedGraph::ReadWord(
+    const FoldedGraph::Word& w, FoldedGraph::Vertex& origin, CWord::size_type length_limit) const {
+  return crag::ReadWord<Path>(w, origin, length_limit, modulus_);
+}
+
+FoldedGraph::ConstPath FoldedGraph::ReadWord(
+    const FoldedGraph::Word& w, const FoldedGraph::Vertex& origin, CWord::size_type length_limit) const {
+  return crag::ReadWord<ConstPath>(w, origin, length_limit, modulus_);
+}
+
+
+FoldedGraph::Path FoldedGraph::PushWord(const FoldedGraph::Word& w, Vertex* origin) {
+  auto current_path = ReadWord(w, *origin);
+
+  auto current_terminus = &current_path.terminus();
+  auto to_push = current_path.unread_word_part();
+
+  while (!to_push.Empty()) {
+    auto next_vertex = &CreateVertex();
+    current_terminus->AddEdge(to_push.GetFront(), next_vertex, 0);
+    current_terminus = next_vertex;
+    to_push.PopFront();
+  }
+
+  return Path(current_path.origin(), *current_terminus, current_path.weight(), Word());
+}
+
+
+void FoldedGraph::PushCycle(const FoldedGraph::Word& w, Vertex* origin, FoldedGraph::Weight weight) {
+  return EnsurePath(w, origin, origin, weight);
+}
+
+
+//! Make origin and terminus equal vertices, with weight on the epsilon-edge
+void EnsureEpsilon(
+    FoldedGraph::Vertex* origin, FoldedGraph::Vertex* terminus, FoldedGraph::Weight weight, Modulus* modulus) {
+  if(origin != terminus) {
+    //add an epsilon-edge from origin to terminus
+    origin->Combine(terminus, weight, modulus);
+  } else {
+    //or just adjust the modulus
+    modulus->EnsureEqual(weight, 0);
+  }
+};
+
+//! Make sure that @p origin and @p terminus are connected with an edge of weight @p weight nad label @p label
+void EnsureEdge(
+    FoldedGraph::Label label, FoldedGraph::Vertex* origin, FoldedGraph::Vertex* terminus, FoldedGraph::Weight weight
+    , Modulus* modulus) {
+  {
+    auto edge = origin->edge(label);
+
+    if (edge) {
+      return EnsureEpsilon(&edge.terminus(), terminus, weight - edge.weight(), modulus);
+    }
+  }
+
+  {
+    auto inverse_edge = terminus->edge(label.Inverse());
+    if (inverse_edge) {
+      return EnsureEpsilon(origin, &inverse_edge.terminus(), weight + inverse_edge.weight(), modulus);
+    }
+  }
+
+  return origin->AddEdge(label, terminus, modulus->Reduce(weight));
+}
+
+void FoldedGraph::EnsurePath(
+    const FoldedGraph::Word& w, FoldedGraph::Vertex* origin, FoldedGraph::Vertex* terminus
+    , FoldedGraph::Weight weight) {
+  //the algorithm is the following:
+  //First, we make sure that we can read first half of w (but one letter 'middle') starting at origin
+  //and the second half terminating at terminus. After that we make sure that the edge in between these
+  //halves is of required weight
+
+  if (w.Empty()) {
+    return EnsureEpsilon(origin, terminus, weight, &modulus_);
+  }
+
+  auto from_origin = w;
+  from_origin.PopBack(static_cast<Word::size_type>(from_origin.size() / 2));
+
+  auto from_terminus = w;
+  from_terminus.PopFront(from_origin.size());
+  from_terminus.Invert();
+
+  auto middle = from_origin.GetBack();
+  from_origin.PopBack();
+
+  auto origin_path = PushWord(from_origin, origin);
+  auto terminus_path = PushWord(from_terminus, terminus);
+
+  return EnsureEdge(middle, &origin_path.terminus(), &terminus_path.terminus(),
+      weight - (origin_path.weight() - terminus_path.weight()), &modulus_);
+}
+
+template
+class FoldedGraph::PathTemplate<FoldedGraph::Vertex>;
+template
+class FoldedGraph::PathTemplate<const FoldedGraph::Vertex>;
+template
+class FoldedGraph::VertexIterT<std::deque<FoldedGraph::Vertex>::iterator>;
+template
+class FoldedGraph::VertexIterT<std::deque<FoldedGraph::Vertex>::const_iterator>;
+template
+class FoldedGraph::EdgesIteratorT<
+    FoldedGraph::Vertex, std::array<
+        FoldedGraph::EdgeData
+        , FoldedGraph::Word::kAlphabetSize>::iterator>;
+template
+class FoldedGraph::EdgesIteratorT<
+    const FoldedGraph::Vertex, std::array<
+        FoldedGraph::EdgeData
+        , FoldedGraph::Word::kAlphabetSize>::const_iterator>;
+
 
 }

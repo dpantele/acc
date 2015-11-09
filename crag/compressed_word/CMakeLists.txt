@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.2)
 project(acc)
 
-add_library(crag_compessed_word STATIC
+add_library(crag_compressed_word STATIC
     xy_letter.h
     compressed_word.h
     compressed_word.cpp
@@ -16,7 +16,7 @@ add_test(
 
 
 add_executable(crag.compressed_word.test_compressed_word test_compressed_word.cpp)
-target_link_libraries(crag.compressed_word.test_compressed_word PRIVATE gtest_main crag_compessed_word)
+target_link_libraries(crag.compressed_word.test_compressed_word PRIVATE gtest_main crag_compressed_word)
 add_test(
     NAME crag.compressed_word.test_compressed_word
     COMMAND crag.compressed_word.test_compressed_word
@@ -27,7 +27,7 @@ add_library(crag_compressed_word_longest_common_subword_cyclic STATIC
   longest_common_subword_cyclic.cpp
 )
 
-target_link_libraries(crag_compressed_word_longest_common_subword_cyclic PUBLIC crag_compessed_word)
+target_link_libraries(crag_compressed_word_longest_common_subword_cyclic PUBLIC crag_compressed_word)
 
 add_executable(crag.compressed_word.test_longest_common_subword_cyclic test_longest_common_subword_cyclic.cpp)
 target_link_libraries(crag.compressed_word.test_longest_common_subword_cyclic PRIVATE
