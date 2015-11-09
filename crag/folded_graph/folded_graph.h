@@ -69,6 +69,7 @@ class FoldedGraph
       }
 
       VertexT& terminus() const {
+        assert(edge_->terminus_);
         return *edge_->terminus_;
       }
 
@@ -142,9 +143,13 @@ class FoldedGraph
   {
    public:
     Vertex() = default;
+
     Vertex(const Vertex&) = delete;
+
     Vertex(Vertex&&) = delete;
+
     Vertex& operator=(const Vertex&) = delete;
+
     Vertex& operator=(Vertex&&) = delete;
 
     //below is semi-public interface
@@ -185,8 +190,8 @@ class FoldedGraph
     }
 
     iterator::EdgeDataAccess edge(Label l);
-    const_iterator::EdgeDataAccess edge(Label l) const;
 
+    const_iterator::EdgeDataAccess edge(Label l) const;
 
 
     //! Rarely used procedure to check if a vertex is merged into another one
@@ -203,7 +208,7 @@ class FoldedGraph
       return epsilon_ ? *FollowEdge(epsilon_).terminus_ : *this;
     }
    private:
-    std::array<EdgeData, 2 * Word::kAlphabetSize> edges_; //!< Mutable since it is modified like in any disjoint partition
+    std::array<EdgeData, 2 * Word::kAlphabetSize> edges_;
 
 
     //fields below are used only in Combine() process
@@ -241,8 +246,9 @@ class FoldedGraph
     return root_->Parent();
   }
 
-  template<typename BaseIter>
-  class VertexIterT {
+  template <typename BaseIter>
+  class VertexIterT
+  {
    public:
     typedef std::forward_iterator_tag iterator_category;
     typedef typename BaseIter::value_type value_type;
@@ -264,7 +270,7 @@ class FoldedGraph
       return *this;
     }
 
-    auto& operator*() const  {
+    auto& operator*() const {
       return base_iter_.operator*();
     }
 
@@ -295,6 +301,9 @@ class FoldedGraph
       }
     }
   };
+
+  using Edge = Vertex::iterator::EdgeDataAccess;
+  using ConstEdge = Vertex::const_iterator::EdgeDataAccess;
 
   using iterator = VertexIterT<std::deque<Vertex>::iterator>;
   using const_iterator = VertexIterT<std::deque<Vertex>::const_iterator>;
@@ -336,7 +345,8 @@ class FoldedGraph
   }
  private:
   template <typename Vertex>
-  struct PathTemplate {
+  struct PathTemplate
+  {
    private:
     Vertex* origin_;
     Vertex* terminus_;
@@ -358,7 +368,8 @@ class FoldedGraph
     }
 
     PathTemplate(Vertex& origin, Vertex& terminus, Weight weight, Word unread_word_part)
-      : origin_(&origin), terminus_(&terminus), weight_(weight), unread_word_part_(std::move(unread_word_part)) { }
+        : origin_(&origin), terminus_(&terminus), weight_(weight), unread_word_part_(std::move(unread_word_part)) {
+    }
   };
 
  public:
