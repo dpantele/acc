@@ -19,3 +19,18 @@ add_test(
     NAME crag.folded_graph.test_folded_graph
     COMMAND crag.folded_graph.test_folded_graph
 )
+
+add_library(crag_folded_graph_harvest STATIC
+    harvest.h
+    harvest.cpp )
+
+target_link_libraries(crag_folded_graph_harvest PUBLIC crag_folded_graph)
+
+add_executable(crag.folded_graph.test_harvest test_harvest.cpp)
+target_link_libraries(crag.folded_graph.test_harvest PRIVATE gtest_main crag_folded_graph_harvest)
+add_test(
+    NAME crag.folded_graph.test_harvest
+    COMMAND crag.folded_graph.test_harvest
+)
+
+
