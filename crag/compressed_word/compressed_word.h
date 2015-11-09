@@ -73,6 +73,9 @@ public:
   //! Prepend a letter
   inline void PushFront(Letter letter);
 
+  //! Prepend a word. As always, result is reduced
+  inline void PushFront(CWord w);
+
   //! Remove the last letter
   inline void PopBack();
 
@@ -245,6 +248,15 @@ void CWord::PushFront(Letter letter) {
   }
   assert(size_ == kMaxLength || (letters_ >> (kLetterShift * size_)) == 0);
 }
+
+void CWord::PushFront(CWord w) {
+  while (!w.Empty()) {
+    PushFront(w.GetBack());
+    w.PopBack();
+  }
+  assert(size_ == kMaxLength || (letters_ >> (kLetterShift * size_)) == 0);
+}
+
 
 CWord CWord::Inverse() const {
   CWord copy(*this);
