@@ -33,4 +33,10 @@ add_test(
     COMMAND crag.folded_graph.test_harvest
 )
 
+add_library(crag_folded_graph_complete STATIC
+    complete.h
+    complete.cpp )
+
+target_link_libraries(crag_folded_graph_complete PUBLIC crag_folded_graph)
+
 

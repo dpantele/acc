@@ -284,6 +284,7 @@ std::vector<Word> MinCycle(std::vector<Word> words) {
   return words;
 }
 
+
 TEST(FoldedGraphHarvest, StressFullHarvestCompareWithNaive) {
   static const auto kDuration = std::chrono::seconds(10);
   static const auto kMinRepeat = 1000u;
@@ -298,6 +299,13 @@ TEST(FoldedGraphHarvest, StressFullHarvestCompareWithNaive) {
   std::chrono::high_resolution_clock::time_point proc_begin;
   auto repeat = 0ull;
   auto non_trivial = 0ull;
+
+  double total_folded_size = 0;
+  double total_naive_size = 0;
+
+  double total_folded_compression_ratio = 0;
+  double total_naive_compression_ratio = 0;
+
   while (std::chrono::steady_clock::now() - begin < kDuration || repeat < kMinRepeat) {
     ++repeat;
 #ifdef DEBUG_PRINT
@@ -340,8 +348,28 @@ TEST(FoldedGraphHarvest, StressFullHarvestCompareWithNaive) {
     auto harvest_naive = g_naive.Harvest(max_length + 2, 1);
     harvest_naive_duration += (std::chrono::high_resolution_clock::now() - proc_begin);
 
-    ASSERT_EQ(MinCycle(std::move(harvest_naive)), MinCycle(std::move(harvest_folded)))
-    << "Pushed " << ::testing::PrintToString(words);
+    double folded_size_initial = harvest_folded.size();
+    harvest_folded = MinCycle(std::move(harvest_folded));
+    total_folded_size += harvest_folded.size();
+
+    if (harvest_folded.empty()) {
+      total_folded_compression_ratio += 1;
+    } else {
+      total_folded_compression_ratio += folded_size_initial / harvest_folded.size();
+    }
+
+    double naive_size_initial = harvest_naive.size();
+    harvest_naive = MinCycle(std::move(harvest_naive));
+    total_naive_size += harvest_naive.size();
+
+    if (harvest_naive.empty()) {
+      total_naive_compression_ratio += 1;
+    } else {
+      total_naive_compression_ratio += naive_size_initial / harvest_naive.size();
+    }
+
+
+    ASSERT_EQ(harvest_naive, harvest_folded) << "Pushed " << ::testing::PrintToString(words);
 
   }
   std::cout << std::string(13, ' ') << repeat << " repeats" << std::endl;
@@ -351,6 +379,19 @@ TEST(FoldedGraphHarvest, StressFullHarvestCompareWithNaive) {
       << " vs "
       << std::chrono::duration_cast<std::chrono::milliseconds>(harvest_naive_duration).count()
       << std::endl;
+
+  std::cout << std::string(13, ' ')
+      << total_folded_size / repeat
+      << " vs "
+      << total_naive_size / repeat
+      << std::endl;
+
+  std::cout << std::string(13, ' ')
+      << total_folded_compression_ratio / repeat
+      << " vs "
+      << total_naive_compression_ratio / repeat
+      << std::endl;
+
 }
 
 
