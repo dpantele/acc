@@ -4,4 +4,5 @@ project(acc)
 include_directories(.)
 
 add_subdirectory(compressed_word)
+add_subdirectory(enumerate)
 add_subdirectory(folded_graph)
