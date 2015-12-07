@@ -24,30 +24,50 @@ class Automorhpism {
   Automorhpism(const char* x_image, const char* y_image)
     : mapping_{CWord(x_image), CWord(x_image), CWord(y_image), CWord(y_image)}
   {
-    mapping_[1].Inverse();
-    mapping_[3].Inverse();
+    mapping_[1].Invert();
+    mapping_[3].Invert();
   }
- private:
+
   typedef std::array<CWord, 2 * CWord::kAlphabetSize> Mapping;
   Mapping mapping_;
+ private:
+
 };
 
-CWord MakeLess(CWord w) {
-  auto inverse = w.Inverse();
-
-  if (inverse < w) {
-    return inverse;
-  }
-
-  auto cyclic_shift = w;
-
-  for (auto i = 0; i < w.size(); ++i) {
-    cyclic_shift.CyclicLeftShift();
-    if (cyclic_shift < w) {
-      return cyclic_shift;
+CWord LeastCyclicShift(CWord w) {
+  CWord result = w;
+  for (auto i = 0u; i < w.size(); ++i) {
+    w.CyclicLeftShift();
+    if (w < result) {
+      result = w;
     }
   }
 
+  return result;
+}
+
+CWord NormalForm(CWord w) {
+  auto u = LeastCyclicShift(w);
+  auto v = LeastCyclicShift(w.Inverse());
+  return u < v ? u : v;
+}
+
+CWord MakeLess(CWord w) {
+//  auto inverse = w.Inverse();
+//
+//  if (inverse < w) {
+//    return inverse;
+//  }
+//
+//  auto cyclic_shift = w;
+//
+//  for (auto i = 0; i < w.size(); ++i) {
+//    cyclic_shift.CyclicLeftShift();
+//    if (cyclic_shift < w) {
+//      return cyclic_shift;
+//    }
+//  }
+//
   static const std::vector<Automorhpism> autos = {
       {"yx", "y"},
       {"Yx", "y"},
@@ -73,7 +93,7 @@ CWord MakeLess(CWord w) {
 
   for (auto&& a : autos) {
     try {
-      auto image = a.Apply(w);
+      auto image = NormalForm(a.Apply(w));
       if (image < w) {
         return image;
       }
@@ -82,16 +102,16 @@ CWord MakeLess(CWord w) {
   }
 
   //now try to find powers
-  for (auto period = 1u; period <= w.size() / 2; ++period) {
-    auto shifted = w;
-    shifted.CyclicLeftShift(period);
-    if (shifted == w) {
-      while(w.size() > period) {
-        w.PopBack();
-      }
-      return w;
-    }
-  }
+//  for (auto period = 1u; period <= w.size() / 2; ++period) {
+//    auto shifted = w;
+//    shifted.CyclicLeftShift(period);
+//    if (shifted == w) {
+//      while(w.size() > period) {
+//        w.PopBack();
+//      }
+//      return w;
+//    }
+//  }
 
   return w;
 }

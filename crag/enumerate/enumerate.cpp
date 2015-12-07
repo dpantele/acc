@@ -14,8 +14,8 @@ CWord NumberToWord(size_t length, unsigned int* num) {
   *num /= 4;
 
   while (result.size() < length) {
-    assert(result.GetBack().Inverse() != ((*num % 3) ^ result.GetBack().AsInt() ^ 2));
-    result.PushBack(((*num % 3) ^ result.GetBack().AsInt() ^ 2));
+    assert(result.GetFront().Inverse() != (*num % 3) + (((*num % 3) >= result.GetFront().Inverse().AsInt()) & 1));
+    result.PushFront((*num % 3) + (((*num % 3) >= result.GetFront().Inverse().AsInt()) & 1));
     *num /= 3;
   }
   return result;
