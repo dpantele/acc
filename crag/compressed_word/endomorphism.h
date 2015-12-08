@@ -5,6 +5,8 @@
 #ifndef ACC_ENDOMORPHISM_H
 #define ACC_ENDOMORPHISM_H
 
+#include "compressed_word.h"
+
 namespace crag {
 
 class Endomorphism
