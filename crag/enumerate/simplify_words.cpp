@@ -7,6 +7,7 @@
 
 #include <compressed_word/compressed_word.h>
 #include <compressed_word/endomorphism.h>
+#include <compressed_word/enumerate_words.h>
 
 using namespace crag;
 
@@ -81,17 +82,18 @@ CWord MakeLess(CWord w) {
 }
 
 int main() {
+  constexpr const CWord::size_type min_length = 1;
+  constexpr const CWord::size_type max_length = 15;
+
   auto start = std::chrono::steady_clock::now();
-  std::ifstream words("all_words.txt");
   std::ofstream result("mapped_words.txt");
 
-  std::string next_word_string;
-  while (words >> next_word_string) {
-    auto next_word = CWord(next_word_string);
-    PrintWord(next_word, &result);
+  for (auto&& word : EnumerateWords::CyclicReduced(min_length, max_length)) {
+    PrintWord(word, &result);
     result << " ";
-    PrintWord(MakeLess(next_word), &result);
-    result << std::endl;
+    PrintWord(MakeLess(word), &result);
+    result << "\n";
   }
+
   std::cout << "Total time: " << std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - start).count() << std::endl;
 }
