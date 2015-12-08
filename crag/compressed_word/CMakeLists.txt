@@ -1,10 +1,11 @@
 cmake_minimum_required(VERSION 3.2)
 
 add_library(crag_compressed_word STATIC
-    xy_letter.h
     compressed_word.h
     compressed_word.cpp
-    enumerate_words.h)
+    enumerate_words.h
+    endomorphism.h
+    xy_letter.h)
 
 target_compile_features(crag_compressed_word PUBLIC cxx_relaxed_constexpr)
 

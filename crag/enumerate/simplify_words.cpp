@@ -6,33 +6,9 @@
 #include <fstream>
 
 #include <compressed_word/compressed_word.h>
+#include <compressed_word/endomorphism.h>
 
 using namespace crag;
-
-class Automorhpism {
- public:
-  CWord Apply(CWord w) const {
-    CWord result;
-    while (!w.Empty()) {
-      result.PushBack(mapping_[w.GetFront().AsInt()]);
-      w.PopFront();
-    }
-    result.CyclicReduce();
-    return result;
-  }
-
-  Automorhpism(const char* x_image, const char* y_image)
-    : mapping_{CWord(x_image), CWord(x_image), CWord(y_image), CWord(y_image)}
-  {
-    mapping_[1].Invert();
-    mapping_[3].Invert();
-  }
-
-  typedef std::array<CWord, 2 * CWord::kAlphabetSize> Mapping;
-  Mapping mapping_;
- private:
-
-};
 
 CWord LeastCyclicShift(CWord w) {
   CWord result = w;
@@ -68,7 +44,7 @@ CWord MakeLess(CWord w) {
 //    }
 //  }
 //
-  static const std::vector<Automorhpism> autos = {
+  constexpr const Endomorphism autos[] = {
       {"yx", "y"},
       {"Yx", "y"},
       { "xy", "y" },
@@ -100,18 +76,6 @@ CWord MakeLess(CWord w) {
     } catch(const std::length_error&)
     { }
   }
-
-  //now try to find powers
-//  for (auto period = 1u; period <= w.size() / 2; ++period) {
-//    auto shifted = w;
-//    shifted.CyclicLeftShift(period);
-//    if (shifted == w) {
-//      while(w.size() > period) {
-//        w.PopBack();
-//      }
-//      return w;
-//    }
-//  }
 
   return w;
 }
