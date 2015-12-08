@@ -25,15 +25,15 @@ class XYLetter {
       std::is_integral<T>::value
       && !std::is_same<typename std::remove_const<typename std::remove_cv<T>::type>::type, char>::value>::type
   >
-  /*implicit*/ XYLetter(T letter)
+  /*implicit*/ constexpr XYLetter(T letter)
     : letter_(static_cast<unsigned short>(letter))
   { }
 
-  explicit XYLetter(char letter)
+  explicit constexpr XYLetter(char letter)
     : letter_(CharToShort(letter))
   { }
 
-  inline char AsChar() const {
+  inline constexpr char AsChar() const {
     switch(letter_) {
       case 0:
         return 'x';
@@ -50,7 +50,7 @@ class XYLetter {
     return '\0';
   }
 
-  inline unsigned int AsInt() const {
+  inline constexpr unsigned int AsInt() const {
     return letter_;
   }
 
@@ -59,11 +59,11 @@ class XYLetter {
     return *this;
   }
 
-  inline XYLetter Inverse() const {
+  inline constexpr XYLetter Inverse() const {
     return XYLetter(static_cast<unsigned short>(letter_ ^ 1));
   }
 
-  XYLetter(const XYLetter& other)
+  constexpr XYLetter(const XYLetter& other)
     : letter_(other.letter_)
   { }
 
@@ -75,10 +75,8 @@ class XYLetter {
  private:
   unsigned short letter_;
 
-  static inline unsigned short CharToShort(char letter) {
+  static constexpr inline unsigned short CharToShort(char letter) {
     switch(letter) {
-      case 'x':
-        return 0;
       case 'X':
         return 1;
       case 'y':
@@ -86,22 +84,23 @@ class XYLetter {
       case 'Y':
         return 3;
       default:
-        throw std::invalid_argument("Only x, y, X, Y can be transformed into XYLetter");
+        //some strange form so that constexpr variant compiles
+        return (letter == 'x') ? 0 : throw std::invalid_argument("Only x, y, X, Y can be transformed into XYLetter");
     }
   }
 };
 
 //! Comparison operator to utilize implicit constructors
-inline bool operator==(const XYLetter& lhs, const XYLetter& rhs) {
+inline constexpr bool operator==(const XYLetter& lhs, const XYLetter& rhs) {
   return lhs.AsInt() == rhs.AsInt();
 }
 
 //! Comparison operator to utilize implicit constructors
-inline bool operator!=(const XYLetter& lhs, const XYLetter& rhs) {
+inline constexpr bool operator!=(const XYLetter& lhs, const XYLetter& rhs) {
   return lhs.AsInt() != rhs.AsInt();
 }
 
-inline bool operator<(const XYLetter& lhs, const XYLetter& rhs) {
+inline constexpr bool operator<(const XYLetter& lhs, const XYLetter& rhs) {
   return lhs.AsInt() < rhs.AsInt();
 }
 
