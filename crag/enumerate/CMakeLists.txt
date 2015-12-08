@@ -14,4 +14,4 @@ add_executable(crag.enumerate.simplify simplify_words.cpp)
 target_link_libraries(crag.enumerate.simplify PRIVATE crag_compressed_word enumerate_normal_form)
 
 add_executable(crag.enumerate.analyze analyze.cpp)
-target_link_libraries(crag.enumerate.analyze PRIVATE crag_compressed_word)
+target_link_libraries(crag.enumerate.analyze PRIVATE crag_compressed_word enumerate_normal_form)

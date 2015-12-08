@@ -4,9 +4,12 @@
 
 #include <algorithm>
 #include <chrono>
+#include <deque>
 #include <fstream>
 
 #include <compressed_word/compressed_word.h>
+#include <crag/compressed_word/enumerate_words.h>
+#include "normal_form.h"
 
 using namespace crag;
 
@@ -55,40 +58,25 @@ struct CanonicalWord {
 };
 
 int main() {
+  constexpr const CWord::size_type min_length = 1;
+  constexpr const CWord::size_type max_length = 15;
+
   auto start = std::chrono::steady_clock::now();
-  std::ifstream words_map("mapped_words.txt");
 
-  std::vector<CanonicalWord> all_words;
+  std::deque<CanonicalWord> all_words;
 
-  std::string next_word_string;
-
-  while (words_map >> next_word_string) {
-    all_words.emplace_back(CWord(next_word_string));
-    words_map >> next_word_string; //skip second word now
-  }
-
-  words_map.close();
-
-  std::cout << "Read in " << std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - start).count() << std::endl;
-
-  words_map.open("mapped_words.txt");
-
-  for (auto word = all_words.begin(); word != all_words.end(); ++word) {
-    words_map >> next_word_string;
-    if (CWord(next_word_string) != word->word_) {
-      std::cout << word - all_words.begin() << ": " << next_word_string << " " << word->word_;
-      throw std::runtime_error("Different word read");
-    }
-    words_map >> next_word_string;
-    auto root_word = CWord(next_word_string);
-    if (root_word != word->word_) {
+  for (auto&& word : EnumerateWords::CyclicReduced(min_length, max_length + 1)) {
+    all_words.emplace_back(word);
+    auto root_word = AutomorphicReduction(word);
+    if (root_word != word) {
       auto root = std::lower_bound(all_words.begin(), all_words.end(), root_word,
         [](const CanonicalWord& lhs, const CWord& rhs) { return lhs.word_ < rhs; });
+
       if(root == all_words.end() || root->word_ != root_word) {
         throw std::runtime_error("Root not found");
       }
 
-      word->Merge(&*root);
+      all_words.back().Merge(&*root);
     }
   }
 
