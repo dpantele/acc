@@ -95,6 +95,27 @@ TEST(CWord, Inverse2) {
   EXPECT_EQ(CWord({2, 0, 3, 1}), a);
 }
 
+TEST(CWord, Enumerate1) {
+  CWord a{};
+  EXPECT_EQ(CWord("x")  , a.ToNextWord());
+  EXPECT_EQ(CWord("X")  , a.ToNextWord());
+  EXPECT_EQ(CWord("y")  , a.ToNextWord());
+  EXPECT_EQ(CWord("Y")  , a.ToNextWord());
+  EXPECT_EQ(CWord("xx") , a.ToNextWord());
+  EXPECT_EQ(CWord("xy") , a.ToNextWord());
+  EXPECT_EQ(CWord("xY") , a.ToNextWord());
+  EXPECT_EQ(CWord("XX") , a.ToNextWord());
+  EXPECT_EQ(CWord("Xy") , a.ToNextWord());
+  EXPECT_EQ(CWord("XY") , a.ToNextWord());
+  EXPECT_EQ(CWord("yx") , a.ToNextWord());
+  EXPECT_EQ(CWord("yX") , a.ToNextWord());
+  EXPECT_EQ(CWord("yy") , a.ToNextWord());
+  EXPECT_EQ(CWord("Yx") , a.ToNextWord());
+  EXPECT_EQ(CWord("YX") , a.ToNextWord());
+  EXPECT_EQ(CWord("YY") , a.ToNextWord());
+  EXPECT_EQ(CWord("xxx"), a.ToNextWord());
+}
+
 
 
 

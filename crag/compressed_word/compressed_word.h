@@ -26,8 +26,8 @@ class CWord {
 public:
   typedef unsigned short size_type; //!< STL container spec
 
-  static const unsigned short kAlphabetSize = 2; //!< Size of alphabet, not designed to be changed
-  static const size_type kMaxLength = 32;        //!< Maximum length, some runtime checks are performed in debug
+  static constexpr const unsigned short kAlphabetSize = 2; //!< Size of alphabet, not designed to be changed
+  static constexpr const size_type kMaxLength = 32;        //!< Maximum length, some runtime checks are performed in debug
 
   typedef XYLetter Letter; //!< Letters are passed as simple integers
   typedef Letter value_type; //!< STL container req
@@ -138,6 +138,9 @@ public:
     }
   }
 
+  //! Proceeds to the next word in the defined order
+  inline constexpr CWord& ToNextWord();
+
 private:
   size_type size_;   //!< The length of the word
   uint64_t letters_; //!< Main bit-compressed storage, every 2 bits is one letters
@@ -146,13 +149,17 @@ private:
   static const uint64_t kLetterShift = 2; //!< Lenght of shift which switches a single letter
   static const uint64_t kFullMask = ~uint64_t{0}; //!< 64 true bits
 
-  //! Clears the bits which are not used but coudl be trashed during some bitwise shift
-  constexpr void ZeroUnused() {
+  constexpr uint64_t current_mask() {
     if (size_) {
-      letters_ &= (kFullMask >> (sizeof(kFullMask) * 8 - kLetterShift * size_));
+      return (kFullMask >> (sizeof(kFullMask) * 8 - kLetterShift * size_));
     } else {
-      letters_ = 0;
+      return 0;
     }
+  }
+
+  //! Clears the bits which are not used but could be trashed during some bitwise shift
+  constexpr void ZeroUnused() {
+    letters_ &= current_mask();
     assert(size_ == kMaxLength || (letters_ >> (kLetterShift * size_)) == 0);
   }
 
@@ -285,6 +292,42 @@ constexpr CWord CWord::Inverse() const {
   copy.Invert();
   return copy;
 }
+
+constexpr CWord& CWord::ToNextWord() {
+  assert(~letters_ != 0 && "CWord is limited by length 32");
+  auto new_letters = letters_ + 1;
+  if ((new_letters & current_mask()) == 0) {
+    //increase length and reset letters
+    assert(size_ != kMaxLength && "This should never happen since all Ys is a good word");
+    ++size_;
+    letters_ = 0; //all xs also has no cancellations
+    return *this;
+  }
+
+  if (size_ == 1) {
+    letters_ = new_letters;
+    return *this;
+  }
+
+  auto checked_count = 1u; // Last letter is always fine
+  auto to_check = new_letters;
+  auto last_letter = Letter(to_check & CWord::kLetterMask);
+  while (checked_count < size_) {
+    to_check >>= CWord::kLetterShift;
+    auto current_letter = Letter(to_check & CWord::kLetterMask);
+    if (current_letter.Inverse() == last_letter) {
+      to_check = ++new_letters;
+      last_letter = Letter(to_check & CWord::kLetterMask);
+      checked_count = 1u;
+    } else {
+      last_letter = current_letter;
+      ++checked_count;
+    }
+  }
+  letters_ = new_letters;
+  return *this;
+}
+
 
 
 inline void PrintWord(const CWord& w1, std::ostream* out) {

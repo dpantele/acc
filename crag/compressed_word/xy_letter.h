@@ -54,7 +54,7 @@ class XYLetter {
     return letter_;
   }
 
-  XYLetter& operator++() {
+  constexpr XYLetter& operator++() {
     ++letter_;
     return *this;
   }
@@ -67,7 +67,7 @@ class XYLetter {
     : letter_(other.letter_)
   { }
 
-  XYLetter& operator=(const XYLetter& other) {
+  constexpr XYLetter& operator=(const XYLetter& other) {
     letter_ = other.letter_;
     return *this;
   }

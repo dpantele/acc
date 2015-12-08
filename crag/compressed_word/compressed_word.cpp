@@ -23,24 +23,4 @@ CWord::CWord(std::initializer_list<Letter> letters)
   assert((letters_ >> (kLetterShift * size_)) == 0);
 }
 
-CWord::CWord(size_type count, Letter letter) : size_(0)
-  , letters_(0) {
-  while (count > 0) {
-    --count;
-    PushBack(letter);
-  }
-  assert((letters_ >> (kLetterShift * size_)) == 0);
-}
-
-CWord::CWord(const char* letters)
-  : size_(0)
-  , letters_(0)
-{
-  for (; *letters != 0; ++letters) {
-    PushBack(Letter(*letters));
-  }
-  assert((letters_ >> (kLetterShift * size_)) == 0);
-}
-
-
 } //namespace crag

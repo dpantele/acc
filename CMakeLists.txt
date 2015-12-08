@@ -7,6 +7,10 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
   message(FATAL_ERROR "In-source builds not allowed. Please make a new directory (called a build directory) and run CMake from there. You may need to remove CMakeCache.txt. ")
 endif()
 
+# to make things easier, we require c++11
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED On)
+
 # guard against bad build-type strings
 
 if (NOT CMAKE_BUILD_TYPE)
@@ -22,9 +26,6 @@ if(    NOT cmake_build_type_tolower STREQUAL "debug"
 endif()
 
 enable_testing()
-
-
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"
     OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
