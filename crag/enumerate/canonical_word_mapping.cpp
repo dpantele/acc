@@ -70,5 +70,15 @@ CanonicalMapping::CanonicalMapping(CWord::size_type min_length, CWord::size_type
   }
 }
 
+const CWord& CanonicalMapping::GetCanonical(const CWord& word) const {
+  auto pos = std::lower_bound(mapping_.begin(), mapping_.end(), word,
+      [](const CanonicalWord& lhs, const CWord& rhs) { return lhs.word_ < rhs; });
+
+  if (pos == mapping_.end() || pos->word_ != word) {
+    throw std::out_of_range("Can't find the word");
+  }
+  return pos->root()->canonical_word_;
+}
+
 } //crag
 

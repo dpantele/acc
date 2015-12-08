@@ -27,6 +27,13 @@ class CanonicalMapping {
       return root_;
     }
 
+    const CanonicalWord* root() const {
+      if (root_ == nullptr) {
+        return this;
+      }
+      return root_->root();
+    }
+
     void Merge(CanonicalWord* other);
 
     CanonicalWord(CWord word)
@@ -39,6 +46,7 @@ class CanonicalMapping {
 
   CanonicalMapping(CWord::size_type min_length, CWord::size_type end_length);
 
+  const CWord& GetCanonical(const CWord& w) const;
 
   const auto& mapping() const {
     return mapping_;

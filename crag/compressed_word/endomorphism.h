@@ -12,8 +12,8 @@ namespace crag {
 class Endomorphism
 {
  public:
-  constexpr crag::CWord Apply(crag::CWord w) const {
-    crag::CWord result;
+  constexpr CWord Apply(CWord w) const {
+    CWord result;
     while (!w.Empty()) {
       result.PushBack(mapping_[w.GetFront().AsInt()]);
       w.PopFront();
@@ -22,8 +22,16 @@ class Endomorphism
     return result;
   }
 
+  constexpr Endomorphism(CWord x_image, CWord y_image)
+      : mapping_{x_image, x_image, y_image, y_image}
+  {
+    for (auto i = 0; i < CWord::kAlphabetSize; ++i) {
+      mapping_[2*i + 1].Invert();
+    }
+  }
+
   constexpr Endomorphism(const char* x_image, const char* y_image)
-      : mapping_{crag::CWord(x_image), crag::CWord(x_image), crag::CWord(y_image), crag::CWord(y_image)}
+    : mapping_{CWord(x_image), CWord(x_image), CWord(y_image), CWord(y_image)}
   {
     for (auto i = 0; i < CWord::kAlphabetSize; ++i) {
       mapping_[2*i + 1].Invert();
