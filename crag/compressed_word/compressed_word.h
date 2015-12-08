@@ -32,7 +32,7 @@ public:
   typedef XYLetter Letter; //!< Letters are passed as simple integers
   typedef Letter value_type; //!< STL container req
 
-  CWord()
+  constexpr CWord()
     : size_(0)
     , letters_(0)
   { }
@@ -41,7 +41,7 @@ public:
   CWord(std::initializer_list<Letter> letters);
 
   //! Construct a power of a letter
-  CWord(size_type count, Letter letter);
+  constexpr CWord(size_type count, Letter letter);
 
   //! Construct from an X-Y string
   explicit CWord(const std::string& letters) 
@@ -49,89 +49,89 @@ public:
   { }
 
   //! Construct from an X-Y C-string
-  explicit CWord(const char* letters);
+  constexpr explicit CWord(const char* letters);
 
-  bool Empty() const {
+  constexpr bool Empty() const {
     return size_ == 0;
   }
 
-  void Clear() {
+  constexpr void Clear() {
     size_ = 0;
     letters_ = 0;
   }
 
-  size_type size() const {
+  constexpr size_type size() const {
     return size_;
   }
 
   //! Append a letter
-  inline void PushBack(Letter letter);
+  constexpr inline void PushBack(Letter letter);
 
   //! Append a word. As always, result is reduced
-  inline void PushBack(CWord w);
+  constexpr inline void PushBack(CWord w);
 
   //! Prepend a letter
-  inline void PushFront(Letter letter);
+  constexpr inline void PushFront(Letter letter);
 
   //! Prepend a word. As always, result is reduced
-  inline void PushFront(CWord w);
+  constexpr inline void PushFront(CWord w);
 
   //! Remove the last letter
-  inline void PopBack();
+  constexpr inline void PopBack();
 
   //! Remove the last @p count letters
-  inline void PopBack(size_type count);
+  constexpr inline void PopBack(size_type count);
 
   //! Remove the first letter
-  inline void PopFront();
+  constexpr inline void PopFront();
 
   //! Remove the first @p count letters
-  inline void PopFront(size_type count);
+  constexpr inline void PopFront(size_type count);
 
   //! Flip the word so that the first letter swaps with the last one, etc
-  inline void Flip();
+  constexpr inline void Flip();
 
   //! In-place inverse
-  inline void Invert();
+  constexpr inline void Invert();
 
   //! Get inverted words
-  inline CWord Inverse() const;
+  constexpr inline CWord Inverse() const;
 
   //! Get the first letter
-  Letter GetFront() const {
+  constexpr Letter GetFront() const {
     assert(!Empty());
     return Letter(static_cast<unsigned short>(letters_ >> (kLetterShift * (size_ - 1))));
   }
 
   //! Get the last letter
-  Letter GetBack() const {
+  constexpr Letter GetBack() const {
     assert(!Empty());
     return Letter(static_cast<unsigned short>(letters_ & kLetterMask));
   }
 
   //! Lexicographic order
-  bool operator < (const CWord& other) const {
+  constexpr bool operator < (const CWord& other) const {
     return size_ == other.size_ ?  letters_ < other.letters_ : size_ < other.size_;
   }
 
-  bool operator == (const CWord& other) const {
+  constexpr bool operator == (const CWord& other) const {
     return letters_ == other.letters_ && size_ == other.size();
   }
 
-  bool operator != (const CWord& other) const {
+  constexpr bool operator != (const CWord& other) const {
     return !(*this == other);
   }
 
   //! Transform xyXY into yXYx (for @p shift = 1)
-  inline void CyclicLeftShift(size_type shift = 1);
+  constexpr inline void CyclicLeftShift(size_type shift = 1);
 
   //! Transform xyXY into YxyX (for @p shift = 1)
-  void CyclicRightShift(size_type shift = 1) {
+  constexpr void CyclicRightShift(size_type shift = 1) {
     CyclicLeftShift(size_ - shift);
   }
 
   //! Cyclic reduction of the word
-  void CyclicReduce() {
+  constexpr void CyclicReduce() {
     while(!Empty() && (GetFront() == GetBack().Inverse())) {
       PopFront();
       PopBack();
@@ -147,7 +147,7 @@ private:
   static const uint64_t kFullMask = ~uint64_t{0}; //!< 64 true bits
 
   //! Clears the bits which are not used but coudl be trashed during some bitwise shift
-  void ZeroUnused() {
+  constexpr void ZeroUnused() {
     if (size_) {
       letters_ &= (kFullMask >> (sizeof(kFullMask) * 8 - kLetterShift * size_));
     } else {
@@ -158,7 +158,26 @@ private:
 
 };
 
-void CWord::CyclicLeftShift(size_type shift) {
+constexpr CWord::CWord(size_type count, Letter letter)
+    : CWord() {
+  while (count > 0) {
+    --count;
+    PushBack(letter);
+  }
+  assert((letters_ >> (kLetterShift * size_)) == 0);
+}
+
+constexpr CWord::CWord(const char* letters)
+    : size_(0)
+      , letters_(0)
+{
+  for (; *letters != 0; ++letters) {
+    PushBack(Letter(*letters));
+  }
+  assert((letters_ >> (kLetterShift * size_)) == 0);
+}
+
+constexpr void CWord::CyclicLeftShift(size_type shift) {
   if (Empty()) {
     return;
   }
@@ -169,14 +188,14 @@ void CWord::CyclicLeftShift(size_type shift) {
   ZeroUnused();
 }
 
-void CWord::Invert() {
-  static const uint64_t kInvertMask = 0x5555555555555555ull;
+constexpr void CWord::Invert() {
+  constexpr const uint64_t kInvertMask = 0x5555555555555555ull;
   Flip();
   letters_ ^= kInvertMask;
   ZeroUnused();
 }
 
-void CWord::Flip() {
+constexpr void CWord::Flip() {
   // swap consecutive pairs
   letters_ = ((letters_ >> 2) & 0x3333333333333333ull) | ((letters_ & 0x3333333333333333ull) << 2);
   // swap nibbles ...
@@ -191,24 +210,24 @@ void CWord::Flip() {
   letters_ >>= (sizeof(letters_) * 8 - size_ * kLetterShift);
 }
 
-void CWord::PopFront(size_type count) {
+constexpr void CWord::PopFront(size_type count) {
   assert(size() >= count);
   size_ -= count;
   ZeroUnused();
 }
 
-void inline CWord::PopFront() {
+constexpr void inline CWord::PopFront() {
   assert(!Empty());
   --size_;
   ZeroUnused();
 }
 
-void CWord::PushBack(Letter letter) {
+constexpr void CWord::PushBack(Letter letter) {
   if(Empty() || letter.Inverse() != GetBack()) {
-    if (size_ == kMaxLength) {
-      throw std::length_error("Length of CWord is limited by 32");
-    }
-    letters_ <<= kLetterShift;
+    size_ == kMaxLength
+        ? throw std::length_error("Length of CWord is limited by 32")
+        : letters_ <<= kLetterShift;
+
     letters_ |= letter.AsInt();
     ++size_;
   } else {
@@ -217,7 +236,7 @@ void CWord::PushBack(Letter letter) {
   assert(size_ == kMaxLength || (letters_ >> (kLetterShift * size_)) == 0);
 }
 
-void CWord::PushBack(CWord w) {
+constexpr void CWord::PushBack(CWord w) {
   while (!w.Empty()) {
     PushBack(w.GetFront());
     w.PopFront();
@@ -225,26 +244,26 @@ void CWord::PushBack(CWord w) {
   assert(size_ == kMaxLength || (letters_ >> (kLetterShift * size_)) == 0);
 }
 
-void CWord::PopBack(size_type count) {
+constexpr void CWord::PopBack(size_type count) {
   assert(size() >= count);
   size_ -= count;
   letters_ >>= (kLetterShift * count);
   assert(size_ == kMaxLength || (letters_ >> (kLetterShift * size_)) == 0);
 }
 
-void CWord::PopBack() {
+constexpr void CWord::PopBack() {
   assert(!Empty());
   --size_;
   letters_ >>= kLetterShift;
   assert(size_ == kMaxLength || (letters_ >> (kLetterShift * size_)) == 0);
 }
 
-void CWord::PushFront(Letter letter) {
+constexpr void CWord::PushFront(Letter letter) {
   if(Empty() || letter.Inverse() != GetFront()) {
-    if (size_ == kMaxLength) {
-      throw std::length_error("Length of CWord is limited by 32");
-    }
-    letters_ |= (static_cast<uint64_t>(letter.AsInt()) << (kLetterShift * size_));
+    size_ == kMaxLength
+      ? throw std::length_error("Length of CWord is limited by 32")
+      : letters_ |= (static_cast<uint64_t>(letter.AsInt()) << (kLetterShift * size_));
+
     ++size_;
   } else {
     PopFront();
@@ -252,7 +271,7 @@ void CWord::PushFront(Letter letter) {
   assert(size_ == kMaxLength || (letters_ >> (kLetterShift * size_)) == 0);
 }
 
-void CWord::PushFront(CWord w) {
+constexpr void CWord::PushFront(CWord w) {
   while (!w.Empty()) {
     PushFront(w.GetBack());
     w.PopBack();
@@ -261,7 +280,7 @@ void CWord::PushFront(CWord w) {
 }
 
 
-CWord CWord::Inverse() const {
+constexpr CWord CWord::Inverse() const {
   CWord copy(*this);
   copy.Invert();
   return copy;
