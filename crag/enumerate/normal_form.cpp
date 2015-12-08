@@ -26,21 +26,6 @@ CWord CyclicNormalForm(CWord w) {
 }
 
 CWord AutomorphicReduction(CWord w) {
-//  auto inverse = w.Inverse();
-//
-//  if (inverse < w) {
-//    return inverse;
-//  }
-//
-//  auto cyclic_shift = w;
-//
-//  for (auto i = 0; i < w.size(); ++i) {
-//    cyclic_shift.CyclicLeftShift();
-//    if (cyclic_shift < w) {
-//      return cyclic_shift;
-//    }
-//  }
-//
   constexpr const Endomorphism autos[] = {
       {"yx", "y"}
       , {"Yx", "y"}

@@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 3.2)
 add_library(enumerate_normal_form
     normal_form.h
     normal_form.cpp
+    canonical_word_mapping.h
+    canonical_word_mapping.cpp
 )
 
 target_link_libraries(enumerate_normal_form PUBLIC crag_compressed_word)
