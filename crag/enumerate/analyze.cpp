@@ -32,7 +32,7 @@ std::vector<Endomorphism> GenAllEndomorphisms(CWord::size_type max_image_length)
 
 int main() {
   constexpr const CWord::size_type min_length = 1;
-  constexpr const CWord::size_type max_length = 10;
+  constexpr const CWord::size_type max_length = 15;
 
   auto start = std::chrono::steady_clock::now();
 
@@ -40,7 +40,7 @@ int main() {
 
   std::cout << "Resolved at " << std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - start).count() << std::endl;
 
-  const auto all_endomorphisms = GenAllEndomorphisms(4);
+  const auto all_endomorphisms = GenAllEndomorphisms(5);
   std::cout << all_endomorphisms.size() << std::endl;
 
   struct CanonicalType {
@@ -78,12 +78,16 @@ int main() {
 
   //now list all images of y^(-1) x^n y x^(-m)
   for (CWord::size_type n_plus_m = 2; n_plus_m <= max_length - 2; ++n_plus_m) {
-    for (CWord::size_type n = 1; n + 1 < n_plus_m; ++n) {
+    for (CWord::size_type n = 1; n < n_plus_m; ++n) {
       auto m = static_cast<CWord::size_type>(n_plus_m - n);
       assert(m > 0);
 
       //construct y^(-1) x^n y x^(-m)
       auto the_word = CWord("Y") + CWord(n, XYLetter('x')) + CWord("y") + CWord(m, XYLetter('X'));
+      std::cout << "Processing ";
+      auto images_start = std::chrono::steady_clock::now();
+      PrintWord(the_word, &std::cout);
+      std::cout.flush();
       assert(the_word.size() <= max_length);
 
       for (auto&& end : all_endomorphisms) {
@@ -113,6 +117,8 @@ int main() {
           }
         } catch (const std::length_error&) { /*do nothing*/ }
       }
+      std::cout << std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - images_start).count() << std::endl;
+
     }
   }
 
