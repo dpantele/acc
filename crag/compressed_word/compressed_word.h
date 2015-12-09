@@ -328,6 +328,10 @@ constexpr CWord& CWord::ToNextWord() {
   return *this;
 }
 
+constexpr CWord operator+(CWord lhs, CWord rhs) {
+  lhs.PushBack(rhs);
+  return lhs;
+}
 
 
 inline void PrintWord(const CWord& w1, std::ostream* out) {
