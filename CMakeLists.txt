@@ -1,4 +1,11 @@
 cmake_minimum_required(VERSION 3.2)
+
+include("cmake/HunterGate.cmake")
+HunterGate(
+    URL "https://github.com/ruslo/hunter/archive/v0.12.31.tar.gz"
+    SHA1 "93d813520a528c5e2faf8acfce39daed5d3b28b8"
+)
+
 project(acc)
 
 # guard against in-source builds
