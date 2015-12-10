@@ -7,6 +7,8 @@
 #include <deque>
 #include <fstream>
 
+#include <boost/variant.hpp>
+
 #include <compressed_word/compressed_word.h>
 #include <compressed_word/endomorphism.h>
 #include <crag/compressed_word/enumerate_words.h>
@@ -30,9 +32,62 @@ std::vector<Endomorphism> GenAllEndomorphisms(CWord::size_type max_image_length)
   return result;
 }
 
+CWord::size_type CommonPrefixLength(CWord u, CWord v) {
+  CWord::size_type result = 0;
+  while (u.GetFront() == v.GetFront()) {
+    ++result;
+    u.PopFront();
+    v.PopFront();
+  }
+  return result;
+}
+
+CWord::size_type LongestPieceFixedStart(const CWord& w) {
+  CWord::size_type result = 1;
+  auto shifted = w;
+  shifted.CyclicLeftShift();
+  while (shifted != w) {
+    result = std::max(result, CommonPrefixLength(w, shifted));
+    if (result * 6 >= w.size()) {
+      return result;
+    }
+    shifted.CyclicLeftShift();
+  }
+
+  auto inverse = w.Inverse();
+  if (LeastCyclicShift(inverse) == LeastCyclicShift(w)) {
+    return result;
+  }
+  result = std::max(result, CommonPrefixLength(w, inverse));
+  inverse.CyclicLeftShift();
+
+  while (inverse != w.Inverse()) {
+    result = std::max(result, CommonPrefixLength(w, inverse));
+    if (result * 6 >= w.size()) {
+      return result;
+    }
+    inverse.CyclicLeftShift();
+  }
+
+  return result;
+}
+
+CWord::size_type LongestPiece(const CWord& w) {
+  auto shifted = w;
+  CWord::size_type result = 1;
+  do {
+    result = std::max(result, LongestPieceFixedStart(shifted));
+    if (result * 6 >= w.size()) {
+      return result;
+    }
+    shifted.CyclicLeftShift();
+  } while (shifted != w);
+  return result;
+}
+
 int main() {
   constexpr const CWord::size_type min_length = 1;
-  constexpr const CWord::size_type max_length = 15;
+  constexpr const CWord::size_type max_length = 16;
 
   auto start = std::chrono::steady_clock::now();
 
@@ -43,11 +98,52 @@ int main() {
   const auto all_endomorphisms = GenAllEndomorphisms(5);
   std::cout << all_endomorphisms.size() << std::endl;
 
+  struct InterestingType { };
+
+  struct PowerType {
+    CWord root_;
+  };
+
+  struct BSType {
+    CWord::size_type n;
+    CWord::size_type m;
+  };
+
+  struct C16Type {  };
+
+  class PrintTypeVisitor
+      : public boost::static_visitor<>
+  {
+   public:
+    std::ostream& out_;
+
+    PrintTypeVisitor(std::ostream& out)
+        : out_(out)
+    { }
+
+    void operator()(InterestingType&) const
+    { }
+
+    void operator()(PowerType& t) const
+    {
+      out_ << "  power of ";
+      PrintWord(t.root_, &out_);
+    }
+    void operator()(BSType& t) const
+    {
+      out_ << " of type BS(" << t.n << ", " << t.m << ")";
+    }
+    void operator()(C16Type&) const
+    {
+      out_ << "  of type C'(1/6)";
+    }
+  };
+
   struct CanonicalType {
     CWord root_;
     size_t class_size_;
 
-    CWord type_ = root_;
+    boost::variant<InterestingType, PowerType, BSType, C16Type> type_ = InterestingType{};
   };
 
   std::vector<CanonicalType> canonical_types_;
@@ -72,7 +168,17 @@ int main() {
     auto power_root = TakeRoot(root);
 
     if (root != power_root) {
-      canonical.type_ = power_root;
+      canonical.type_ = PowerType{power_root};
+    }
+  }
+
+  //check C16
+  for (auto&& canonical : canonical_types_) {
+    if (!boost::get<InterestingType>(&canonical.type_)) {
+      continue;
+    }
+    if (LongestPiece(canonical.root_) * 6 < canonical.root_.size()) {
+      canonical.type_ = C16Type{};
     }
   }
 
@@ -112,13 +218,12 @@ int main() {
 
           assert(image_type != canonical_types_.end() && image_type->root_ == canonical_image);
 
-          if (image_type->type_ == image_type->root_) {
-            image_type->type_ = the_word;
+          if (boost::get<InterestingType>(&image_type->type_)) {
+            image_type->type_ = BSType{n, m};
           }
         } catch (const std::length_error&) { /*do nothing*/ }
       }
       std::cout << std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - images_start).count() << std::endl;
-
     }
   }
 
@@ -126,12 +231,7 @@ int main() {
     PrintWord(canonical.root_, &result);
     result << ' ' << canonical.class_size_;
 
-    if (canonical.root_ != canonical.type_) {
-      result << " (of type ";
-      PrintWord(canonical.type_, &result);
-      result << ")";
-    }
-
+    boost::apply_visitor(PrintTypeVisitor(result), canonical.type_);
     result << "\n";
   }
 
