@@ -9,6 +9,7 @@
 #include <assert.h>
 #include <cstdint>
 #include <iostream>
+#include <sstream>
 #include <tuple>
 #include <random>
 
@@ -351,6 +352,12 @@ inline void PrintTo(const CWord& w, ::std::ostream* out) {
 inline std::ostream& operator<<(std::ostream& out, const CWord& w) {
   PrintTo(w, &out);
   return out;
+}
+
+inline std::string ToString(const CWord& w) {
+  std::ostringstream out;
+  PrintTo(w, &out);
+  return out.str();
 }
 
 class RandomWord {
