@@ -19,7 +19,7 @@ using Weight = FoldedGraph::Weight;
 
 TEST(FoldedGraph, JustRoot) {
   FoldedGraph g;
-  EXPECT_EQ(1, g.size());
+  EXPECT_EQ(1u, g.size());
   EXPECT_EQ(g.root(), g[0]);
   EXPECT_EQ(g.root(), *g.begin());
   EXPECT_FALSE(g.root().edge(0));
