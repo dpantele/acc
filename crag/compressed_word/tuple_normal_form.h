@@ -41,6 +41,23 @@ class CWordTuple {
     return *this;
   }
 
+  constexpr void Reverse() {
+    auto first = begin();
+    auto last = end();
+    while ((first!=last)&&(first!=--last)) {
+      CWord c = std::move(*first);
+      *first = std::move(*last);
+      *last = std::move(c);
+      ++first;
+    }
+  }
+
+  constexpr CWordTuple GetReversed() const {
+    auto copy = *this;
+    copy.Reverse();
+    return copy;
+  }
+
   constexpr CWord& operator[](size_t i) {
     return words_[i];
   }
@@ -147,7 +164,7 @@ boost::optional<std::pair<CWordTuple<N>, Endomorphism>> WhiteheadReduce(const CW
 };
 
 template<size_t N>
-CWordTuple<N> MinimalElementInAutomorphicOrbit(CWordTuple<N> words) {
+std::set<CWordTuple<N>> ShortestAutomorphicImages(CWordTuple<N> words) {
   bool length_is_decreasing = true;
   while (length_is_decreasing) {
     auto reduced = WhiteheadReduce(words);
@@ -205,7 +222,12 @@ CWordTuple<N> MinimalElementInAutomorphicOrbit(CWordTuple<N> words) {
     to_check.pop_front();
   }
 
-  return *minimal_orbit.begin();
+  return minimal_orbit;
+}
+
+template<size_t N>
+inline CWordTuple<N> MinimalElementInAutomorphicOrbit(const CWordTuple<N>& w) {
+  return *ShortestAutomorphicImages(w).begin();
 }
 
 inline CWord MinimalElementInAutomorphicOrbit(CWord w) {
