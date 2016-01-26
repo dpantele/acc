@@ -58,5 +58,8 @@ add_executable(crag.compressed_word.test_tuple_normal_form test_tuple_normal_for
 target_link_libraries(crag.compressed_word.test_tuple_normal_form
     PRIVATE crag_compressed_word_tuple_normal_form gtest_main)
 
+add_executable(crag.compressed_word.profile_tuple_normal_form profile_tuple_normal_form.cpp)
+target_link_libraries(crag.compressed_word.profile_tuple_normal_form
+    PRIVATE crag_compressed_word_tuple_normal_form)
 
 # add_executable(crag.compressed_word.test_xy_letter test_xy_letter.cpp)
