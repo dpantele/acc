@@ -13,7 +13,7 @@ add_executable(crag.enumerate.enumerate enumerate.cpp)
 target_link_libraries(crag.enumerate.enumerate PRIVATE crag_compressed_word)
 
 add_executable(crag.enumerate.simplify simplify_words.cpp)
-target_link_libraries(crag.enumerate.simplify PRIVATE crag_compressed_word enumerate_normal_form)
+target_link_libraries(crag.enumerate.simplify PRIVATE crag_compressed_word enumerate_normal_form  PRIVATE crag_compressed_word_tuple_normal_form)
 
 hunter_add_package(Boost)
 find_package(Boost CONFIG REQUIRED)
@@ -23,6 +23,7 @@ target_link_libraries(crag.enumerate.analyze PRIVATE
     Boost::boost
     crag_compressed_word
     crag_compressed_word_longest_common_subword_cyclic
+    crag_compressed_word_tuple_normal_form
     enumerate_normal_form)
 
 add_executable(crag.orbits orbits.cpp)

@@ -12,10 +12,26 @@
 #include <compressed_word/compressed_word.h>
 #include <compressed_word/endomorphism.h>
 #include <crag/compressed_word/enumerate_words.h>
+#include <compressed_word/tuple_normal_form.h>
 #include "canonical_word_mapping.h"
 #include "normal_form.h"
 
 using namespace crag;
+
+CWord normal_form(const CWord& w) {
+  auto result = w;
+  for (auto&& u : ShortestAutomorphicImages(CWordTuple<1>({w}))) {
+    if (u[0] < result) {
+      result = u[0];
+    }
+    auto U = LeastCyclicPermutation(u[0].Inverse());
+    if (U < result) {
+      result = U;
+    }
+  }
+  return result;
+}
+
 
 std::vector<Endomorphism> GenAllEndomorphisms(CWord::size_type max_image_length) {
   std::vector<Endomorphism> result;
@@ -86,14 +102,10 @@ CWord::size_type LongestPiece(const CWord& w) {
 }
 
 int main() {
-  constexpr const CWord::size_type min_length = 1;
-  constexpr const CWord::size_type max_length = 16;
+//  constexpr const CWord::size_type min_length = 1;
+  constexpr const CWord::size_type max_length = 20;
 
   auto start = std::chrono::steady_clock::now();
-
-  CanonicalMapping mapping(min_length, max_length + 1);
-
-  std::cout << "Resolved at " << std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - start).count() << std::endl;
 
   const auto all_endomorphisms = GenAllEndomorphisms(5);
   std::cout << all_endomorphisms.size() << std::endl;
@@ -147,29 +159,23 @@ int main() {
 
   struct CanonicalType {
     CWord root_;
-    size_t class_size_;
 
     boost::variant<UnknownType, TrivialType, PowerType, BSType, C16Type> type_ = UnknownType{};
   };
 
   std::vector<CanonicalType> canonical_types_;
 
-  std::ofstream result("roots.txt");
-  for (auto&& word : mapping.mapping()) {
-    if (word.root_ != nullptr) {
-      continue;
-    }
-    canonical_types_.emplace_back(CanonicalType{word.canonical_word_, word.set_size_});
+  std::ifstream in("ak3_words_normal_sorted.txt");
+  std::ofstream result("ak3_typed.txt");
+  std::istream_iterator<std::string> eof;
+  for (auto i = std::istream_iterator<std::string>(in); i != eof; ++i) {
+    canonical_types_.emplace_back(CanonicalType{CWord(*i)});
   }
 
   std::sort(canonical_types_.begin(), canonical_types_.end(), [](
       const CanonicalType& a, const CanonicalType& b) {
         return a.root_ < b.root_;
       });
-
-  //Mark x as trivial
-  assert(canonical_types_[0].root_ == 'x');
-  canonical_types_[0].type_ = TrivialType{};
 
   //first remove roots
   for (auto&& canonical : canonical_types_) {
@@ -191,15 +197,26 @@ int main() {
     }
   }
 
+  std::set<CWord> seen_bs_;
+
   //now list all images of y^(-1) x^n y x^(-m)
   std::deque<std::pair<CWord, BSType>> images_;
 
   auto setBSType = [&](const CWord& bs_word, BSType bs_type) {
-    auto canonical_image = mapping.GetCanonical(bs_word);
+    auto canonical_image = normal_form(bs_word);
+
+    auto is_new = seen_bs_.insert(canonical_image);
+    if (!is_new.second) {
+      return false;
+    }
+
     auto image_type = std::lower_bound(canonical_types_.begin(), canonical_types_.end(), canonical_image,
         [](auto& type, auto& word) { return type.root_ < word; });
 
-    assert(image_type != canonical_types_.end() && image_type->root_ == canonical_image);
+    if (image_type == canonical_types_.end() || image_type->root_ != canonical_image) {
+      images_.emplace_back(canonical_image, bs_type);
+      return true;
+    }
 
     if (boost::get<UnknownType>(&image_type->type_)) {
       image_type->type_ = bs_type;
@@ -254,9 +271,11 @@ int main() {
     std::cout << std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - images_start).count() << std::endl;
   }
 
+  auto i = 0u;
+
   for (auto&& canonical : canonical_types_) {
+    result << ++i << " ";
     PrintWord(canonical.root_, &result);
-    result << ' ' << canonical.class_size_;
 
     boost::apply_visitor(PrintTypeVisitor(result), canonical.type_);
     result << "\n";
