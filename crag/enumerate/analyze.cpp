@@ -32,6 +32,20 @@ CWord normal_form(const CWord& w) {
   return result;
 }
 
+bool IsProperEndo(const CWord& x_image, const CWord& y_image) {
+  auto x_root = TakeRoot(x_image);
+  auto y_root = TakeRoot(y_image);
+  if (x_root == y_root
+      || x_root == y_root.Inverse()) {
+    return false;
+  }
+  return true;
+}
+
+bool IsProperEndo(const Endomorphism& e) {
+  return IsProperEndo(e.Apply(CWord("x")), e.Apply(CWord("y")));
+}
+
 
 std::vector<Endomorphism> GenAllEndomorphisms(CWord::size_type max_image_length) {
   std::vector<Endomorphism> result;
@@ -40,7 +54,9 @@ std::vector<Endomorphism> GenAllEndomorphisms(CWord::size_type max_image_length)
       for (auto&& x_image : EnumerateWords(x_image_length)) {
         auto y_image_length = static_cast<CWord::size_type>(total_length - x_image_length);
         for (auto&& y_image : EnumerateWords(y_image_length)) {
-          result.emplace_back(Endomorphism(x_image, y_image));
+          if (IsProperEndo(x_image, y_image)) {
+            result.emplace_back(Endomorphism(x_image, y_image));
+          }
         }
       }
     }
@@ -121,6 +137,8 @@ int main() {
   struct BSType {
     int n;
     int m;
+
+    Endomorphism phi;
   };
 
   struct C16Type {  };
@@ -214,13 +232,13 @@ int main() {
         [](auto& type, auto& word) { return type.root_ < word; });
 
     if (image_type == canonical_types_.end() || image_type->root_ != canonical_image) {
-      images_.emplace_back(canonical_image, bs_type);
+      images_.emplace_back(canonical_image, std::move(bs_type));
       return true;
     }
 
     if (boost::get<UnknownType>(&image_type->type_)) {
       image_type->type_ = bs_type;
-      images_.emplace_back(canonical_image, bs_type);
+      images_.emplace_back(canonical_image, std::move(bs_type));
       return true;
     } else {
       return false;
@@ -234,12 +252,12 @@ int main() {
 
       setBSType(
           CWord("Y") + CWord(n, XYLetter('x')) + CWord("y") + CWord(m, XYLetter('X')),
-          BSType{n, m}
+          BSType{n, m, Endomorphism(CWord("x"), CWord("y"))}
       );
 
       setBSType(
           CWord("Y") + CWord(n, XYLetter('x')) + CWord("y") + CWord(m, XYLetter('x')),
-          BSType{n, -static_cast<int>(m)}
+          BSType{n, -static_cast<int>(m), Endomorphism(CWord("x"), CWord("y"))}
       );
     }
   }
@@ -260,12 +278,20 @@ int main() {
 
     for (auto&& end : all_endomorphisms) {
       try {
+        auto phi = the_type.phi * end;
+
+        if (!IsProperEndo(phi)) {
+          continue;
+        }
+
         auto image = end.Apply(the_word);
         if (image.size() > max_length || image.size() < 1) {
           continue;
         }
 
-        setBSType(image, the_type);
+        auto next_type = the_type;
+        next_type.phi = phi;
+        setBSType(image, next_type);
       } catch (const std::length_error&) { /*do nothing*/ }
     }
     std::cout << std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - images_start).count() << std::endl;
