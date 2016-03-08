@@ -82,6 +82,14 @@ class CWordTuple {
     return N;
   }
 
+  constexpr auto length() const {
+    auto result = 0u;
+    for (auto&& elem : *this) {
+      result += elem.size();
+    }
+    return result;
+  }
+
   constexpr bool operator<(const CWordTuple& other) const {
     auto mismatch = std::mismatch(begin(), end(), other.begin());
     if (mismatch.first == end()) {
@@ -96,6 +104,23 @@ class CWordTuple {
  private:
   std::array<CWord, N> words_;
 };
+template<size_t N>
+std::ostream& operator<<(std::ostream& out, const CWordTuple<N>& t) {
+  if (t.size() == 1) {
+    return out << t[0];
+  }
+  out << "(";
+  bool is_first = true;
+  for (auto&& w : t) {
+    if (!is_first) {
+      out << ",";
+    } else {
+      is_first = false;
+    }
+    out << w;
+  }
+  return out << ")";
+}
 
 //! Return the minimal cyclic permutation of @p w in CWord's order
 CWord LeastCyclicPermutation(const CWord& w);
