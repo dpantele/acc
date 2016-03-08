@@ -24,3 +24,10 @@ target_link_libraries(crag.enumerate.analyze PRIVATE
     crag_compressed_word
     crag_compressed_word_longest_common_subword_cyclic
     enumerate_normal_form)
+
+add_executable(crag.orbits orbits.cpp)
+target_link_libraries(crag.orbits PRIVATE
+    crag_compressed_word
+    crag_compressed_word_tuple_normal_form
+)
+
