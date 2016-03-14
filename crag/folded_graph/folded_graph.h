@@ -413,9 +413,9 @@ class FoldedGraph
 };
 
 extern template
-class FoldedGraph::PathTemplate<FoldedGraph::Vertex>;
+struct FoldedGraph::PathTemplate<FoldedGraph::Vertex>;
 extern template
-class FoldedGraph::PathTemplate<const FoldedGraph::Vertex>;
+struct FoldedGraph::PathTemplate<const FoldedGraph::Vertex>;
 extern template
 class FoldedGraph::VertexIterT<std::deque<FoldedGraph::Vertex>::iterator>;
 extern template

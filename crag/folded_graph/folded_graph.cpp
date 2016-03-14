@@ -304,9 +304,9 @@ void FoldedGraph::EnsurePath(
 }
 
 template
-class FoldedGraph::PathTemplate<FoldedGraph::Vertex>;
+struct FoldedGraph::PathTemplate<FoldedGraph::Vertex>;
 template
-class FoldedGraph::PathTemplate<const FoldedGraph::Vertex>;
+struct FoldedGraph::PathTemplate<const FoldedGraph::Vertex>;
 template
 class FoldedGraph::VertexIterT<std::deque<FoldedGraph::Vertex>::iterator>;
 template
