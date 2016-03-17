@@ -12,6 +12,7 @@
 
 #include <compressed_word/compressed_word.h>
 #include "modulus.h"
+#include <boost/optional.hpp>
 
 namespace crag {
 
@@ -80,6 +81,15 @@ class FoldedGraph
       explicit operator bool() const {
         return static_cast<bool>(*edge_);
       }
+
+      bool operator==(const EdgeDataAccess& other) const {
+        return edge_ == other.edge_ && label_ == other.label_;
+      }
+
+      bool operator!=(const EdgeDataAccess& other) const {
+        return !(*this == other);
+      }
+
 
      private:
       EdgeIter edge_;
@@ -403,6 +413,17 @@ class FoldedGraph
     PushCycle(w, &root(), weight);
   }
 
+  boost::optional<Word> FindShortestPath(const Vertex& from, const Vertex& to) const;
+  boost::optional<Word> FindShortestCycle(const Vertex& base) const;
+
+  bool HasPath(const Vertex& from, const Vertex& to) const;
+  bool HasPath(const Word& label, const Vertex& from, const Vertex& to) const;
+  bool HasPath(const Word& label, Weight weight, const Vertex& from, const Vertex& to) const;
+  bool HasCycle(const Vertex& base) const;
+  bool HasCycle(const Word& label, const Vertex& base) const;
+  bool HasCycle(const Word& label, Weight weight, const Vertex& base) const;
+
+
  private:
   std::deque<Vertex> vertices_;
   Vertex* root_; //!< We need explicit root since vertices_.front() may be merged
@@ -431,6 +452,6 @@ class FoldedGraph::EdgesIteratorT<
         FoldedGraph::EdgeData
         , FoldedGraph::Word::kAlphabetSize>::const_iterator>;
 
-}
+} //namespace crag
 
 #endif //ACC_FOLDED_GRAPH_H

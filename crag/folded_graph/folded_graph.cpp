@@ -1,10 +1,13 @@
 //
 // Created by dpantele on 11/7/15.
 //
-
+#include <set>
 #include <vector>
+#include <map>
+
 #include "folded_graph.h"
 #include "modulus.h"
+
 
 namespace crag {
 
@@ -302,6 +305,128 @@ void FoldedGraph::EnsurePath(
     root_ = &root_->Parent();
   }
 }
+
+boost::optional<FoldedGraph::Word> FindNontrivialPath(const FoldedGraph::Vertex& from, const FoldedGraph::Vertex& to) {
+  using Word = FoldedGraph::Word;
+  using Vertex = FoldedGraph::Vertex;
+  struct GraphPath {
+    Word w;
+    const Vertex* from;
+    const Vertex* to;
+
+    GraphPath Advance(const FoldedGraph::ConstEdge& edge) const {
+      assert(to->edge(edge.label()) == edge);
+      auto result = GraphPath{w, from, &edge.terminus()};
+      result.w.PushBack(edge.label());
+      return result;
+    }
+  };
+
+  std::map<const Vertex*, GraphPath> visited;
+  std::deque<GraphPath> next;
+
+  next.push_back(GraphPath{Word(), &from, &from});
+
+  if (from != to) {
+    next.push_back(GraphPath{Word(), &to, &to});
+  }
+
+  while(!next.empty()) {
+    auto& current = next.front();
+
+    auto first_visit = visited.emplace(current.to, current);
+    if (!first_visit.second) {
+      auto& existing = first_visit.first->second;
+      if (from == to || existing.from != current.from) {
+        //found path
+        assert(existing.w.Empty()
+               || current.w.Empty()
+               || existing.w.GetBack() != current.w.GetBack());
+        if (*current.from == from) {
+          auto result = current.w;
+          existing.w.Invert();
+          result.PushBack(existing.w);
+          return result;
+        } else {
+          assert(*current.from == to);
+          auto result = existing.w;
+          current.w.Invert();
+          result.PushBack(current.w);
+          return result;
+        }
+      } else {
+        next.pop_front();
+        continue;
+      }
+    }
+
+    for(auto&& edge : *current.to) {
+      if (!current.w.Empty() && edge.label().Inverse() == current.w.GetBack()) {
+        continue;
+      }
+      auto advanced = current.Advance(edge);
+      next.push_back(advanced);
+    }
+
+    next.pop_front();
+  }
+  return {};
+}
+
+boost::optional<FoldedGraph::Word> FoldedGraph::FindShortestPath(
+    const FoldedGraph::Vertex& from, const FoldedGraph::Vertex& to) const {
+  if (from == to) {
+    return Word();
+  }
+
+  return FindNontrivialPath(from, to);
+}
+
+boost::optional<FoldedGraph::Word> FoldedGraph::FindShortestCycle(const FoldedGraph::Vertex& base) const {
+  auto result = FindNontrivialPath(base, base);
+  if (result && result->Inverse() < result) {
+    return result->Inverse();
+  } else {
+    return result;
+  }
+}
+
+bool FoldedGraph::HasPath(const FoldedGraph::Vertex& from, const FoldedGraph::Vertex& to) const {
+  return static_cast<bool>(FindShortestPath(from, to));
+}
+
+bool FoldedGraph::HasPath(
+    const FoldedGraph::Word& label, const FoldedGraph::Vertex& from, const FoldedGraph::Vertex& to) const {
+  auto existing_path = ReadWord(label, from);
+  if (!existing_path.unread_word_part().Empty()) {
+    return false;
+  }
+  return existing_path.terminus() == to;
+}
+
+bool FoldedGraph::HasPath(
+    const FoldedGraph::Word& label, FoldedGraph::Weight weight, const FoldedGraph::Vertex& from
+    , const FoldedGraph::Vertex& to) const {
+  auto existing_path = ReadWord(label, from);
+  if (!existing_path.unread_word_part().Empty()) {
+    return false;
+  }
+  return existing_path.terminus() == to && existing_path.weight() == weight;
+}
+
+bool FoldedGraph::HasCycle(const FoldedGraph::Vertex& base) const {
+  return static_cast<bool>(FindShortestCycle(base));
+}
+
+bool FoldedGraph::HasCycle(const FoldedGraph::Word& label, const FoldedGraph::Vertex& base) const {
+  return HasPath(label, base, base);
+}
+
+bool FoldedGraph::HasCycle(
+    const FoldedGraph::Word& label, FoldedGraph::Weight weight, const FoldedGraph::Vertex& base) const {
+  return HasPath(label, weight, base, base);
+}
+
 
 template
 struct FoldedGraph::PathTemplate<FoldedGraph::Vertex>;

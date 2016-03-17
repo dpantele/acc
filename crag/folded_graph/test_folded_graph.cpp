@@ -467,5 +467,48 @@ TYPED_TEST(GraphFolding, StressTest) {
     << current_iteration << " iterations in " << test_duration.count() << " seconds" << std::endl;
 }
 
+
+TEST(GraphShortestPath, Example1) {
+  FoldedGraph g;
+  g.PushCycle(Word("xxxx"));
+  g.PushCycle(Word("y"));
+
+  auto cycle = g.FindShortestCycle(g.root());
+  ASSERT_TRUE(static_cast<bool>(cycle));
+  EXPECT_EQ(Word("y"), *cycle);
+}
+
+TEST(GraphShortestPath, Example2) {
+  FoldedGraph g;
+  g.PushCycle(Word("xxxx"));
+  g.PushCycle(Word("yy"));
+
+  auto cycle = g.FindShortestCycle(g.root());
+  ASSERT_TRUE(static_cast<bool>(cycle));
+  EXPECT_EQ(Word("yy"), *cycle);
+}
+
+TEST(GraphShortestPath, Example3) {
+  FoldedGraph g;
+  g.PushCycle(Word("xxxx"));
+  g.PushCycle(Word("yy"));
+
+  auto cycle = g.FindShortestCycle(g.ReadWord(Word("xx"), g.root()).terminus());
+  ASSERT_TRUE(static_cast<bool>(cycle));
+  EXPECT_EQ(Word("xxxx"), *cycle);
+}
+
+TEST(GraphShortestPath, Example4) {
+  FoldedGraph g;
+  g.PushCycle(Word("xxxx"));
+  g.PushCycle(Word("yy"));
+
+  auto cycle =
+      g.FindShortestPath(g.ReadWord(Word("x"), g.root()).terminus(), g.ReadWord(Word("y"), g.root()).terminus());
+  ASSERT_TRUE(static_cast<bool>(cycle));
+  EXPECT_EQ(Word("XY"), *cycle);
+}
+
+
 }
 }

@@ -9,7 +9,10 @@ add_library(crag_folded_graph STATIC
     folded_graph.cpp )
 
 target_compile_features(crag_folded_graph PUBLIC cxx_decltype_auto)
-target_link_libraries(crag_folded_graph PUBLIC crag_compressed_word crag_folded_graph_modulus)
+
+hunter_add_package(Boost)
+find_package(Boost CONFIG REQUIRED)
+target_link_libraries(crag_folded_graph PUBLIC crag_compressed_word crag_folded_graph_modulus Boost::boost)
 
 
 add_executable(crag.folded_graph.test_folded_graph test_folded_graph.cpp internal/cycles.h internal/cycles_examples.h internal/folded_graph_internal_checks.h)
