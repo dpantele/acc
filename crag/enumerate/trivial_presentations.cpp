@@ -206,7 +206,7 @@ CWord FindPath(const FoldedGraph::Vertex& from, const FoldedGraph::Vertex& to) {
 
 
 std::pair<std::vector<CWord>, size_t> findNonTrivialFinIndexSubgroup(const CWord& u, const CWord& v) {
-  constexpr auto kCompleteCount = 4;
+  constexpr auto kCompleteCount = 2;
 
   FoldedGraph g;
   bool is_complete = false;
@@ -290,7 +290,7 @@ void findBestSubgroup(const CWord& u, const CWord& v) {
   std::vector<CWord> shortest_rels;
   auto shortest_length = 0;
   size_t index = 0u;
-  for (auto i = 0u; i < 10000; ++i) {
+  for (auto i = 0u; i < 100000; ++i) {
     auto new_relations = findNonTrivialFinIndexSubgroup(u, v);
     if (new_relations.first.empty()) {
       continue;
@@ -319,7 +319,22 @@ void findBestSubgroup(const CWord& u, const CWord& v) {
   std::cout << "index: " << index << "\n";
 }
 
+/*
+ * CWord("xxxyxYxy"), CWord("xxxYXyyXY")
+ * 1: x
+ * 4: yXyy
+ * index: 9
+ *
+ * CWord("xxyxyXXY"), CWord("xyyyyxYxY")
+ * 2: xx
+ * 4: yxYx
+ * index: 22
+ */
+
 int main(int argc, char* argv[]) {
+  findBestSubgroup(CWord("xxyxyXXY"), CWord("xyyyyxYxY"));
+  return 0;
+
   //we will consider words of type x..., y...
   auto total_length = 16u;
 
