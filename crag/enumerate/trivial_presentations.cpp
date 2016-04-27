@@ -204,11 +204,25 @@ CWord FindPath(const FoldedGraph::Vertex& from, const FoldedGraph::Vertex& to) {
   return FindPath(from, to, &visited);
 }
 
+auto kCompleteCount = 2;
+auto kFirstMin = 6u;
+auto kFirstMax = 10u;
 
 std::pair<std::vector<CWord>, size_t> findNonTrivialFinIndexSubgroup(const CWord& u, const CWord& v) {
-  constexpr auto kCompleteCount = 2;
-
   FoldedGraph g;
+
+  std::random_device d;
+  auto seed = d();
+//  std::cout << "Seed: " << seed << "\n";
+  std::mt19937_64 generator(seed); //2512030257
+
+
+  RandomWord init_word(kFirstMin, kFirstMax);
+
+  std::vector<CWord> combined = {init_word(generator)};
+
+  g.PushCycle(combined.front());
+
   bool is_complete = false;
   for (auto i = 0u; i < kCompleteCount && !is_complete; ++i) {
     auto size = g.size();
@@ -219,19 +233,8 @@ std::pair<std::vector<CWord>, size_t> findNonTrivialFinIndexSubgroup(const CWord
     }
   }
 
-  if (is_complete) {
-    std::cout << "Group is complete" << std::endl;
-    return {};
-  }
 
-  std::random_device d;
-  auto seed = d();
-//  std::cout << "Seed: " << seed << "\n";
-  std::mt19937_64 generator(seed); //2512030257
-
-  std::vector<CWord> combined;
-
-  while (true) {
+  while (!is_complete) {
     auto to_combine = sample(1, generator, g.begin(), g.end());
     if (to_combine.size() != 1) {
       std::cerr << "For some reason got trivial graph in a wrong place" << std::endl;
@@ -247,14 +250,11 @@ std::pair<std::vector<CWord>, size_t> findNonTrivialFinIndexSubgroup(const CWord
     g.Combine(&g.root(), &*(to_combine[0]), 0);
 
     if (!CanCompleteWith(u, g) && !CanCompleteWith(v, g)) {
-      break;
+      is_complete = true;
     }
   }
 
-  auto count = 0u;
-  for (auto&& v : g) {
-    ++count;
-  }
+  auto count = std::distance(g.begin(), g.end());
   if(!HasRootCycle(CWord("x"), g) || !HasRootCycle(CWord("y"), g)) {
     return {std::move(combined), count};
   } else {
@@ -290,7 +290,7 @@ void findBestSubgroup(const CWord& u, const CWord& v) {
   std::vector<CWord> shortest_rels;
   auto shortest_length = 0;
   size_t index = 0u;
-  for (auto i = 0u; i < 100000; ++i) {
+  for (auto i = 0u; i < 100; ++i) {
     auto new_relations = findNonTrivialFinIndexSubgroup(u, v);
     if (new_relations.first.empty()) {
       continue;
@@ -329,10 +329,66 @@ void findBestSubgroup(const CWord& u, const CWord& v) {
  * 2: xx
  * 4: yxYx
  * index: 22
+ *
+ * CWord("xxxxxyXXy"), CWord("xxyyyyxxY")
+ * 9: YYxyXyxxY
+ * 7: xYYXXXY
+ * 10: XYYYxYXYXX
+ * 5: Xyyyx
+ * index: 8
  */
 
 int main(int argc, char* argv[]) {
-  findBestSubgroup(CWord("xxyxyXXY"), CWord("xyyyyxYxY"));
+  kCompleteCount = std::stoi(argv[1]);
+  CWord a(argv[2]);
+  CWord b(argv[3]);
+
+  while (true) {
+    auto subgroup = findNonTrivialFinIndexSubgroup(a, b);
+    if (subgroup.second != 0) {
+      for (auto&& w : subgroup.first) {
+        std::cout << w << "\n";
+      }
+      std::cout << "index: " << subgroup.second << std::endl;
+    }
+  }
+
+  return 0;
+//  findBestSubgroup(CWord("xxxyxYxy"), CWord("xxxYXyyXY"));
+  /* findBestSubgroup(CWord("xxxxxyXXy"), CWord("xxyyyyxxY"));
+   * 10: YXyXyyyXXy
+9: YxYYYxYxx
+10: yyxxyxYYxx
+index: 8
+   */
+
+  /* findBestSubgroup(CWord("xxxxyXy"), CWord("xxYxyyyyyxY"));
+   * 2: xx
+9: YXyyXXYYY
+7: yxxyyxx
+index: 8
+   */
+
+
+  findBestSubgroup(CWord("xxxyXXYXY"), CWord("xyyXyXYYY"));
+  findBestSubgroup(CWord("xxxyXXYYY"), CWord("xyxYYXYxY"));
+  findBestSubgroup(CWord("xxxyxxYXY"), CWord("xyyXyXYYY"));
+  findBestSubgroup(CWord("xxxyxxYXY"), CWord("xyyyXYYxY"));
+  findBestSubgroup(CWord("xxxyxxYYY"), CWord("xyXYYXyXy"));
+  findBestSubgroup(CWord("xxxyxyXXY"), CWord("xyyyXYYxY"));
+  findBestSubgroup(CWord("xxxyxyyXY"), CWord("xxYxYXyyy"));
+
+  /*
+  findBestSubgroup(CWord("xxyXYxYXy"), CWord("xyXYYXyxY"));
+   7: yxYYxxx
+8: yXyxxYxx
+index: 9
+   */
+  /*
+  findBestSubgroup(CWord("xxyxxyXXy"), CWord("xyyXyyxYY"));
+   8: XYXYYYxY
+2: yX
+index: 96 */
   return 0;
 
   //we will consider words of type x..., y...
@@ -348,7 +404,7 @@ int main(int argc, char* argv[]) {
   auto start = std::chrono::steady_clock::now();
 
   auto count = 0u;
-  auto count_nontrivial = 0u;
+//  auto count_nontrivial = 0u;
 
   for(auto u : EnumerateWords(2, total_length - 1)) {
     if (u.GetFront() == u.GetBack().Inverse()) {
