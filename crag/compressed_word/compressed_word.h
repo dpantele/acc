@@ -123,6 +123,15 @@ public:
   constexpr bool operator < (const CWord& other) const {
     return size_ == other.size_ ?  letters_ < other.letters_ : size_ < other.size_;
   }
+  constexpr bool operator <= (const CWord& other) const {
+    return size_ == other.size_ ?  letters_ <= other.letters_ : size_ < other.size_;
+  }
+  constexpr bool operator > (const CWord& other) const {
+    return !(*this <= other);
+  }
+  constexpr bool operator >= (const CWord& other) const {
+    return !(*this < other);
+  }
 
   constexpr bool operator == (const CWord& other) const {
     return letters_ == other.letters_ && size_ == other.size();
