@@ -24,6 +24,15 @@ add_test(
     COMMAND crag.compressed_word.test_compressed_word
 )
 
+add_executable(crag.compressed_word.test_endomorphism test_endomorphism.cpp)
+target_link_libraries(crag.compressed_word.test_endomorphism PRIVATE gtest_main crag_compressed_word)
+add_test(
+    NAME crag.compressed_word.test_endomorphism
+    COMMAND crag.compressed_word.test_endomorphism
+)
+
+
+
 add_library(crag_compressed_word_longest_common_subword_cyclic STATIC
   longest_common_subword_cyclic.h
   longest_common_subword_cyclic.cpp
