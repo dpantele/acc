@@ -44,6 +44,15 @@ public:
   //! Construct a power of a letter
   constexpr CWord(size_type count, Letter letter);
 
+  //! Special structur used to efficently dump & restore the CWord
+  struct Dump {
+    size_type length;
+    uint64_t letters;
+  };
+
+  constexpr CWord(Dump d);
+  constexpr Dump GetDump() const;
+
   //! Construct from an X-Y string
   explicit CWord(const std::string& letters) 
     : CWord(letters.c_str())
@@ -328,6 +337,16 @@ constexpr CWord& CWord::ToNextWord() {
   letters_ = new_letters;
   return *this;
 }
+
+constexpr CWord::CWord(Dump d)
+  : size_(d.length)
+  , letters_(d.letters)
+{ }
+
+constexpr CWord::Dump CWord::GetDump() const {
+  return CWord::Dump{size_, letters_};
+}
+
 
 constexpr CWord operator+(CWord lhs, CWord rhs) {
   lhs.PushBack(rhs);
