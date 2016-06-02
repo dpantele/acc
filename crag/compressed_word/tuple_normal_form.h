@@ -112,6 +112,9 @@ class CWordTuple {
   constexpr bool operator==(const CWordTuple& other) const {
     return std::mismatch(begin(), end(), other.begin()).first == end();
   }
+  constexpr bool operator!=(const CWordTuple& other) const {
+    return !(*this == other);
+  }
  private:
   std::array<CWord, N> words_;
 };
