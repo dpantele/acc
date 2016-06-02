@@ -91,7 +91,18 @@ class CWordTuple {
   }
 
   constexpr bool operator<(const CWordTuple& other) const {
-    auto mismatch = std::mismatch(begin(), end(), other.begin());
+    auto this_length = this->length();
+    auto other_length = other.length();
+    if (this_length != other_length) {
+      return this_length < other_length;
+    }
+
+    auto mismatch = std::mismatch(begin(), end(), other.begin(), [](const auto& a, const auto& b) { return a.size() == b.size(); });
+    if (mismatch.first != end()) {
+      return mismatch.first->size() < mismatch.second->size();
+    }
+
+    mismatch = std::mismatch(begin(), end(), other.begin());
     if (mismatch.first == end()) {
       return false;
     }
