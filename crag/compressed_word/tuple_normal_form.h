@@ -154,6 +154,14 @@ CWordTuple<N> ConjugationInverseNormalForm(CWordTuple<N> words) {
   return words;
 }
 
+inline CWordTuple<2> ConjugationInverseFlipNormalForm(CWordTuple<2> tuple) {
+  tuple = ConjugationInverseNormalForm(tuple);
+  if (tuple[1] < tuple[0]) {
+    tuple.Reverse();
+  }
+  return tuple;
+}
+
 template<size_t N>
 size_t Length(const CWordTuple<N>& words) {
   return std::accumulate(words.begin(), words.end(), size_t{0}, [](size_t s, const CWord& w) { return s + w.size(); });
