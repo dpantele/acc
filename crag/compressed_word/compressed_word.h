@@ -382,10 +382,15 @@ inline std::ostream& operator<<(std::ostream& out, const CWord& w) {
   return out;
 }
 
-inline std::string ToString(const CWord& w) {
-  std::ostringstream out;
-  PrintTo(w, &out);
-  return out.str();
+inline std::string ToString(CWord w) {
+  std::string out;
+  out.reserve(w.size());
+  while (!w.Empty()) {
+    out.push_back(w.GetFront().AsChar());
+    w.PopFront();
+  }
+
+  return out;
 }
 
 class RandomWord {
