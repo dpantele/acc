@@ -46,7 +46,6 @@ bool hasTrivialAbelianisation(const CWord& u, const CWord& v) {
 }
 
 bool ConjugationLengthReduction(const CWord& u, const CWord& v) {
-  static auto i = 0u;
   FoldedGraph g;
   g.PushCycle(u, 1);
   CompleteWith(v, &g);

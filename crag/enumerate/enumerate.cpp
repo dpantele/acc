@@ -23,7 +23,7 @@ int main() {
   for(CWord::size_type length = 1; length <= 5; ++length) {
     std::cout << "Length " << length << ": "
         << std::flush;
-    auto start = std::chrono::steady_clock::now();
+//    auto start = std::chrono::steady_clock::now();
     size_t count = 0;
     for (auto&& current_word : EnumerateWords::CyclicReduced(length)) {
       PrintWord(current_word, &out);

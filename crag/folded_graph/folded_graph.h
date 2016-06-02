@@ -265,7 +265,6 @@ class FoldedGraph
     typedef typename BaseIter::value_type value_type;
     typedef typename BaseIter::pointer pointer;
     typedef typename BaseIter::reference reference;
-    typedef typename BaseIter::size_type size_type;
     typedef typename BaseIter::difference_type difference_type;
 
     VertexIterT(BaseIter iter, BaseIter end)

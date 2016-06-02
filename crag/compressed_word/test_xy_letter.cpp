@@ -27,7 +27,7 @@ TEST(XYLetter, ShortToCharConvert) {
 }
 
 TEST(XYLetter, ArrayInit) {
-  std::array<XYLetter, 4> word{0, 3, 2, 1};
+  std::array<XYLetter, 4> word = { {0, 3, 2, 1} };
   EXPECT_EQ(XYLetter(0), word[0]);
   EXPECT_EQ(XYLetter(3), word[1]);
   EXPECT_EQ(XYLetter(2), word[2]);
