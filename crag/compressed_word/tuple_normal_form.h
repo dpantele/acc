@@ -211,27 +211,29 @@ boost::optional<std::pair<CWordTuple<N>, Endomorphism>> WhiteheadReduce(const CW
 };
 
 template<size_t N>
-std::set<CWordTuple<N>> ShortestAutomorphicImages(CWordTuple<N> words) {
-  bool length_is_decreasing = true;
-  while (length_is_decreasing) {
-    auto reduced = WhiteheadReduce(words);
+CWordTuple<N> WhitheadMinLengthTuple(CWordTuple<N> tuple) {
+  while (true) {
+    auto reduced = WhiteheadReduce(tuple);
     if (reduced) {
-      length_is_decreasing = true;
-      words = reduced->first;
+      tuple = reduced->first;
     } else {
-      length_is_decreasing = false;
+      return tuple;
     }
   }
+}
 
-  auto minimal_length = Length(words);
+template<size_t N>
+void CompleteWithShortestAutoImages(std::set<CWordTuple<N>>* tuples) {
+  //Require that all elements of words are Whitehead-normalized
+  assert(std::all_of(tuples->begin(), tuples->end(), [](auto& a) { return WhiteheadReduce(a) == boost::none; }));
 
-  words = LeastCyclicPermutation(words);
-
-  std::set<CWordTuple<N>> minimal_orbit = {words};
-  std::deque<const CWordTuple<N>*> to_check = {&words};
+  std::deque<const CWordTuple<N>*> to_check;
+  for (auto&& t : *tuples) {
+    to_check.push_back(&t);
+  }
 
   auto addElement = [&](const CWordTuple<N>& new_element) {
-    auto result = minimal_orbit.insert(new_element);
+    auto result = tuples->insert(new_element);
     if (result.second) {
       to_check.emplace_back(&*result.first);
     }
@@ -259,8 +261,9 @@ std::set<CWordTuple<N>> ShortestAutomorphicImages(CWordTuple<N> words) {
     for (auto&& e : kWhiteheadAutomorphisms) {
       try {
         auto image = Apply(e, *to_check.front());
-        assert(Length(image) >= minimal_length);
-        if (Length(image) == minimal_length) {
+        assert(Length(image) >= Length(*to_check.front()));
+        if (Length(image) == Length(*to_check.front())) {
+          //since we consider cyclic words, choose the minimal cyclic shift of each
           addElement(LeastCyclicPermutation(image));
         }
       }
@@ -268,7 +271,16 @@ std::set<CWordTuple<N>> ShortestAutomorphicImages(CWordTuple<N> words) {
     }
     to_check.pop_front();
   }
+}
 
+template<size_t N>
+std::set<CWordTuple<N>> ShortestAutomorphicImages(CWordTuple<N> words) {
+  words = WhitheadMinLengthTuple(words);
+  words = LeastCyclicPermutation(words);
+
+  std::set<CWordTuple<N>> minimal_orbit = {words};
+
+  CompleteWithShortestAutoImages(&minimal_orbit);
   return minimal_orbit;
 }
 
