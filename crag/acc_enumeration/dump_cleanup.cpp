@@ -71,8 +71,6 @@ void ProcessNewWordsDump(const Config& c) {
   }
 }
 
-constexpr auto kSortMemoryLimit = (1 << 30);
-
 void ProcessQueue(const Config& c) {
   std::clog << "pairs_queue.dump.txt.gz" << std::endl;
   if (!fs::exists(c.pairs_queue_dump())) {
@@ -85,7 +83,7 @@ void ProcessQueue(const Config& c) {
 
   auto queue_sorted_path = c.dump_dir() / fs::unique_path("pairs_queue.%%%%-%%%%-%%%%-%%%%.txt.gz");
 
-  ExternalSort(c.pairs_queue_dump(), queue_sorted_path, c.dump_dir(), kSortMemoryLimit);
+  ExternalSort(c.pairs_queue_dump(), queue_sorted_path, c.dump_dir(), c.memory_limit_);
 
   // for now it must be really simple: each pair should have only one push/pop
   // so we find if a pair has a pop operation
@@ -169,7 +167,7 @@ void ProcessVertices(const Config& c) {
   path temp_vertices = ConcatDumps(c, c.ac_graph_vertices_in(), c.ac_graph_vertices_dump());
 
   //then we sort the file
-  ExternalSort(temp_vertices, temp_vertices, c.dump_dir(), kSortMemoryLimit);
+  ExternalSort(temp_vertices, temp_vertices, c.dump_dir(), c.memory_limit_);
 
   // and now we need to group by word
   {
@@ -250,7 +248,7 @@ void ProcessEdges(const Config& c) {
 
   //just remove complete duplicates after appending the input
   path temp_edges = ConcatDumps(c, c.ac_graph_edges_in(), c.ac_graph_edges_dump());
-  ExternalSort(temp_edges, temp_edges, c.dump_dir(), kSortMemoryLimit);
+  ExternalSort(temp_edges, temp_edges, c.dump_dir(), c.memory_limit_);
 
   auto input = c.ifstream(temp_edges);
   auto output = c.ofstream(c.ac_graph_edges_in());
@@ -279,7 +277,7 @@ void ProcessPairsClasses(const Config& c) {
   }
 
   //we keep only the first time when a pair appears here
-  ExternalSort(c.pairs_classes_dump(), c.pairs_classes_dump(), c.dump_dir(), kSortMemoryLimit);
+  ExternalSort(c.pairs_classes_dump(), c.pairs_classes_dump(), c.dump_dir(), c.memory_limit_);
 
   auto input = c.ifstream(c.pairs_classes_dump());
   auto output = c.ofstream(c.pairs_classes_in());
@@ -306,7 +304,6 @@ void ProcessPairsClasses(const Config& c) {
   input.reset();
   fs::remove(c.pairs_classes_dump());
 }
-
 
 int main(int argc, char* argv[]) {
   if (argc != 2) {

@@ -12,10 +12,13 @@ find_package(nlohmann-json REQUIRED)
 add_library(acc_enumerate_utils
     STATIC
     acc_class.h acc_class.cpp
-    state_dump.h state_dump.cpp
     acc_classes.h acc_classes.cpp
+    boost_filtering_stream.h
     config.h config.cpp
-    boost_filtering_stream.h Terminator.cpp Terminator.h external_sort.cpp external_sort.h)
+    convert_byte_count.cpp convert_byte_count.h
+    external_sort.cpp external_sort.h
+    state_dump.h state_dump.cpp
+    Terminator.cpp Terminator.h)
 
 find_package(Threads)
 

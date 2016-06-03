@@ -5,6 +5,9 @@
 #ifndef ACC_CONFIG_H
 #define ACC_CONFIG_H
 
+#include <algorithm>
+#include <memory>
+
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <nlohmann/json.hpp>
@@ -12,6 +15,7 @@
 #include <fmt/ostream.h>
 
 #include "boost_filtering_stream.h"
+#include "convert_byte_count.h"
 
 using boost::filesystem::path;
 using json = nlohmann::json;
@@ -124,14 +128,25 @@ struct Config {
     return this->ofstream(p, std::ios_base::out);
   }
 
+  size_t memory_limit_ = 0u;
+
   Config()
       : base_dir_(boost::filesystem::current_path())
-  { }
+  {
+    // by default memory limit is a half size of get_temporary_buffer
+    // but it is not more then 32Gb
+    // memory limit is used only in dump processes
+
+    auto buffer = std::get_temporary_buffer<char>(64ull << 30);
+    std::return_temporary_buffer(buffer.first);
+    memory_limit_ = static_cast<size_t>(std::max(buffer.second / 2, 0l));
+  }
 
   std::string ConfigAsString() const {
     json dump;
     // base_dir is not dumped, because in general it should be derived from the config path
     dump["dump_dir"] = dump_dir_.generic_string();
+    dump["dump_memory_limit"] = ToHumanReadableByteCount(memory_limit_);
     dump["input"] = input_.generic_string();
     return dump.dump(4);
   }
