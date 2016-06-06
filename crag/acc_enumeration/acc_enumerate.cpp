@@ -200,6 +200,8 @@ void EnumerateAC(path config_path) {
       auto uv_class_pos = ac_index.find(uv_pair);
       assert(uv_class_pos != ac_index.end());
       ACClass* uv_class = uv_class_pos->second;
+      // we either use automorphisms or don't, we don't start using them after some pair was processed
+      bool use_automorphisms = uv_class->AllowsAutMoves();
 
       //to make a single ACM-move, first we need to build a FoldedGraph
       FoldedGraph g;
@@ -224,7 +226,7 @@ void EnumerateAC(path config_path) {
         new_tuples.back() = ConjugationInverseFlipNormalForm(new_tuples.back());
         state_dump.DumpHarvestEdge(uv_pair, new_tuples.back(), is_flipped);
 
-        if (uv_class->AllowsAutMoves()) {
+        if (use_automorphisms) {
           auto harvested_tuple = new_tuples.back();
           new_tuples.back() = WhitheadMinLengthTuple(new_tuples.back());
           new_tuples.back() = ConjugationInverseFlipNormalForm(new_tuples.back());
@@ -254,7 +256,7 @@ void EnumerateAC(path config_path) {
       new_tuples.erase(new_tuples_keep, new_tuples.end());
 
       for (auto&& tuple : new_tuples) {
-        if (uv_class->AllowsAutMoves()) {
+        if (use_automorphisms) {
           std::set<CWordTuple<2>> minimal_orbit = {tuple};
           CompleteWithShortestAutoImages(&minimal_orbit);
 
