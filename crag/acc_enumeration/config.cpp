@@ -7,6 +7,28 @@
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/iostreams/device/file.hpp>
 
+#if defined(__unix__)
+
+#include <sys/sysinfo.h>
+
+static size_t GetTotalRAM() {
+  struct sysinfo info;
+  sysinfo(&info);
+
+  return info.totalram;
+}
+
+
+#else
+
+static size_t GetTotalRAM() {
+      auto buffer = std::get_temporary_buffer<char>(64ull << 30);
+      std::return_temporary_buffer(buffer.first);
+      memory_limit_ = return buffer.second;
+}
+
+#endif
+
 void Config::DumpConfig() const {
   fs::ofstream config_file(config_path_);
   if (config_file.fail()) {
@@ -23,6 +45,12 @@ void Config::LoadFromJson(path json_path) {
     // try to create it
     config_path_ = json_path;
     base_dir_ = json_path.parent_path();
+    if (memory_limit_ == 0) {
+      // by default memory limit is a half size of get_temporary_buffer
+      // but it is not more then 32Gb
+      // memory limit is used only in dump processes
+      memory_limit_ = GetTotalRAM() / 2;
+    }
     DumpConfig();
     return;
   }

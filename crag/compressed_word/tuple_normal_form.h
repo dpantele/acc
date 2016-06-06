@@ -109,6 +109,33 @@ class CWordTuple {
     return *mismatch.first < *mismatch.second;
   }
 
+  constexpr bool operator<=(const CWordTuple& other) const {
+    auto this_length = this->length();
+    auto other_length = other.length();
+    if (this_length != other_length) {
+      return this_length < other_length;
+    }
+
+    auto mismatch = std::mismatch(begin(), end(), other.begin(), [](const auto& a, const auto& b) { return a.size() == b.size(); });
+    if (mismatch.first != end()) {
+      return mismatch.first->size() < mismatch.second->size();
+    }
+
+    mismatch = std::mismatch(begin(), end(), other.begin());
+    if (mismatch.first == end()) {
+      return true;
+    }
+    return *mismatch.first < *mismatch.second;
+  }
+
+  constexpr bool operator>(const CWordTuple& other) const {
+    return !(*this <= other);
+  }
+
+  constexpr bool operator>=(const CWordTuple& other) const {
+    return !(*this < other);
+  }
+
   constexpr bool operator==(const CWordTuple& other) const {
     return std::mismatch(begin(), end(), other.begin()).first == end();
   }

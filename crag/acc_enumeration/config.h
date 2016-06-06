@@ -132,15 +132,7 @@ struct Config {
 
   Config()
       : base_dir_(boost::filesystem::current_path())
-  {
-    // by default memory limit is a half size of get_temporary_buffer
-    // but it is not more then 32Gb
-    // memory limit is used only in dump processes
-
-    auto buffer = std::get_temporary_buffer<char>(64ull << 30);
-    std::return_temporary_buffer(buffer.first);
-    memory_limit_ = static_cast<size_t>(std::max(buffer.second / 2, 0l));
-  }
+  { }
 
   std::string ConfigAsString() const {
     json dump;
@@ -157,6 +149,12 @@ struct Config {
     ConfigFromJson(config, "base_dir", &base_dir_);
     ConfigFromJson(config, "input", &input_);
     ConfigFromJson(config, "dump_dir", &dump_dir_);
+
+    std::string temp;
+    ConfigFromJson(config, "dump_memory_limit", &temp);
+    if (!temp.empty()) {
+      memory_limit_ = FromHumanReadableByteCount(temp);
+    }
   }
 
   void LoadFromJson(path json_path);
