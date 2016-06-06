@@ -64,6 +64,10 @@ struct ACClass {
     return canonical_.root()->aut_types_.all();
   }
 
+  bool IsPrimary() const {
+    return canonical_.IsRoot();
+  }
+
   ACClass(size_t id, ACPair pair, AutKind kind, ACStateDump* logger);
 
   void AddPair(ACPair pair);

@@ -387,10 +387,11 @@ void EnumerateAC(path config_path) {
     if (++processed_count % 1000 == 0) {
       std::clog << processed_count << "/" << to_process.GetSize() << "/" << ac_index.size() <<"\n";
       for (auto&& c : ac_classes) {
-        c.DescribeForLog(&std::clog);
-        std::clog << "\n";
+        if (c.IsPrimary()) {
+          c.DescribeForLog(&std::clog);
+          std::clog << "\n";
+        }
       }
-      std::clog << std::flush;
     }
   }
   std::clog << "Enumeration stopped" << std::endl;
