@@ -24,94 +24,6 @@
 
 using namespace crag;
 
-//struct ACPair {
-//  CWordTuple<2> uv_;
-//
-//  const CWord& u() const {
-//    return uv_[0];
-//  }
-//  const CWord& v() const {
-//    return uv_[1];
-//  }
-//
-//  struct Class {
-//
-//  };
-//
-//
-//};
-
-std::vector<CWordTuple<2>> GetInputs() {
-  return {
-      {CWord("xyxYXY"), CWord("xxxYYYY")},
-  };
-}
-
-//void GenerateACClasses(const std::vector<CWordTuple<2>>& inputs, std::deque<ACClass>* ac_classes) {
-//  auto x_xy = Endomorphism(CWord("xy"), CWord("y"));
-//  auto x_y = Endomorphism(CWord("y"), CWord("x"));
-//  auto y_Y = Endomorphism(CWord("x"), CWord("Y"));
-//
-//
-//  for (auto&& input : inputs) {
-//    ac_classes->emplace_back(input, ACClass::AutKind::Ident);
-//    ac_classes->emplace_back(Apply(x_xy, input), ACClass::AutKind::x_xy);
-//    ac_classes->emplace_back(Apply(x_y, input), ACClass::AutKind::x_y);
-//    ac_classes->emplace_back(Apply(y_Y, input), ACClass::AutKind::y_Y);
-//  }
-//}
-
-std::map<CWordTuple<2>, ACClass*>
-GetInitialACIndex(std::deque<ACClass>& classes_storage) {
-  std::map<CWordTuple<2>, ACClass*> index;
-  for (auto&& c : classes_storage) {
-    index.emplace(c.minimal(), &c);
-  }
-  return index;
-};
-
-CWordTuple<2> AutNormalForm(const CWordTuple<2>& tuple) {
-  auto min = tuple;
-  for (auto&& image : ShortestAutomorphicImages(tuple)) {
-    auto image_min = ConjugationInverseNormalForm(image);
-    if (image_min < min) {
-      min = image_min;
-    }
-    image_min.Reverse();
-
-    if (image_min < min) {
-      min = image_min;
-    }
-  }
-  return min;
-}
-
-//class ACCGraphDump {
-//  using Pair = CWordTuple<2>;
-// private:
-//
-// public:
-//  void MarkHarvested(const crag::CWordTuple<2>& t, unsigned int complete_count, unsigned int harvest_length) {
-//    PairInfo& veretx = GetVertex(t)->second;
-//    vertex.complete_count = std::max(verte)
-//  }
-//
-//  void AddHarvestEdge(const Pair& from, const Pair& to, bool flipped) {
-//    edges_out_.write("{0} {1} h {2}\n", index(from), index(to), flipped);
-//  }
-//
-//  void AddAutEdge(const Pair& from, const Pair& to) {
-//    edges_out_.write("{0} {1} a\n", index(from), index(to));
-//  }
-//
-//  ~ACCGraph() {
-//    for (auto&& v : vertices_) {
-//      vertices_out_.write("{} {} {}\n", v.first, v.second.index, v.second.harvested);
-//    }
-//  }
-//};
-//
-
 //! The input file should cotain a pair of {x,y} word on each line
 std::vector<ACPair> LoadInput(const Config& c) {
   std::ifstream in(c.input().native());
@@ -174,8 +86,6 @@ void EnumerateAC(path config_path) {
 
   //first, read all input pairs
   auto inputs = LoadInput(config);
-
-  std::cout << AutNormalForm(inputs.front()) << std::endl;
 
   //for each pair we also generate 4 other pairs which are images under the fixed canonical nielsen automorphisms
   //namely, phi_1 = x->xy, phi_2 = x<->y and phi_3 y->Y. So, we have classes UV_0, UV_1, UV_2, UV_3.
