@@ -34,8 +34,10 @@ struct ACStateDump {
 
   void NewMinimum(const ACClass&, const ACPair&);
   void DumpVertexHarvest(const ACPair& v, unsigned int harvest_limit, unsigned int complete_count);
+
+  ACPair last_origin_;
   void DumpHarvestEdge(const ACPair& from, const ACPair& to, bool from_is_flipped);
-  void DumpAutomorphEdge(const ACPair& from, const ACPair& to);
+  void DumpAutomorphEdge(const ACPair& from, const ACPair& to, bool inverse);
   void DumpPairClass(const ACPair& p, const ACClass& c);
 
   enum class PairQueueState : size_t {

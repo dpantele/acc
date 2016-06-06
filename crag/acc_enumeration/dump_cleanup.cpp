@@ -246,23 +246,50 @@ void ProcessEdges(const Config& c) {
     return;
   }
 
-  //just remove complete duplicates after appending the input
+  //group edges by the origin
   path temp_edges = ConcatDumps(c, c.ac_graph_edges_in(), c.ac_graph_edges_dump());
   ExternalSort(temp_edges, temp_edges, c.dump_dir(), c.memory_limit_);
 
   auto input = c.ifstream(temp_edges);
   auto output = c.ofstream(c.ac_graph_edges_in());
-  std::string previous_line;
+  std::string origin;
+  std::vector<std::string> termini;
   std::string current_line;
+
+  std::regex terminus_regex(fmt::format(" {} [ha][01])", ACStateDump::pair_dump_re));
+
+  std::sregex_iterator current_terminus;
+  auto termini_end = std::sregex_iterator();
+
   while (std::getline(input, current_line)) {
-    if (previous_line == current_line) {
+    auto origin_end = current_line.find(' ');
+    if (origin_end == std::string::npos || origin_end == 0) {
       continue;
     }
 
-    output.write(current_line.c_str(), current_line.size());
-    output.put('\n');
+    fmt::StringRef current_origin(current_line.c_str(), origin_end);
+    if (current_origin != origin) {
+      if (!termini.empty()) {
+        output.write(origin.c_str(), origin.size());
 
-    previous_line = std::move(current_line);
+        std::sort(termini.begin(), termini.end());
+        termini.erase(std::unique(termini.begin(), termini.end()), termini.end());
+
+        for(auto&& t : termini) {
+          output.write(t.c_str(), t.size());
+        }
+
+        output.put('\n');
+        termini.clear();
+      }
+      origin = current_origin.to_string();
+    }
+
+    current_terminus = std::sregex_iterator(current_line.begin() + origin_end, current_line.end(), terminus_regex);
+    while (current_terminus != termini_end) {
+      termini.emplace_back(current_terminus->str());
+      ++current_terminus;
+    }
   }
   input.reset();
   fs::remove(temp_edges);

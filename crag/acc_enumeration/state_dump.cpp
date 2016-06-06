@@ -67,17 +67,26 @@ void ACStateDump::DumpPair(const ACPair& p, fmt::MemoryWriter* out) {
 }
 
 void ACStateDump::DumpHarvestEdge(const ACPair& from, const ACPair& to, bool from_is_flipped) {
-  DumpPair(from, &this->ac_graph_edges_);
+  if (from != last_origin_) {
+    last_origin_ = from;
+    ac_graph_edges_.put('\n');
+    DumpPair(from, &this->ac_graph_edges_);
+  }
   fmt::print(ac_graph_edges_, " ");
   DumpPair(to, &this->ac_graph_edges_);
-  fmt::print(ac_graph_edges_, " h {:d}\n", from_is_flipped);
+  fmt::print(ac_graph_edges_, " h{:d}", from_is_flipped);
 }
 
-void ACStateDump::DumpAutomorphEdge(const ACPair& from, const ACPair& to) {
-  DumpPair(from, &this->ac_graph_edges_);
+void ACStateDump::DumpAutomorphEdge(const ACPair& from, const ACPair& to, bool inverse) {
+  assert(inverse ? from < to : from > to);
+  if (from != last_origin_) {
+    last_origin_ = from;
+    ac_graph_edges_.put('\n');
+    DumpPair(from, &this->ac_graph_edges_);
+  }
   fmt::print(ac_graph_edges_, " ");
   DumpPair(to, &this->ac_graph_edges_);
-  fmt::print(ac_graph_edges_, " a\n");
+  fmt::print(ac_graph_edges_, " a{:d}", inverse);
 }
 
 ACPair ACStateDump::LoadPair(const std::string& pair_dump) {

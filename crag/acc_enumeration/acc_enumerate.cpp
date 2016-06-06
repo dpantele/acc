@@ -182,7 +182,7 @@ void EnumerateAC(path config_path) {
       }
 
       if (reduced_pair != pair && ac_index.count(pair) != 0) {
-        state_dump.DumpAutomorphEdge(pair, reduced_pair);
+        state_dump.DumpAutomorphEdge(pair, reduced_pair, false);
         return;
       }
 
@@ -222,15 +222,22 @@ void EnumerateAC(path config_path) {
       //they were not cyclically normalized, do it now
       //also if uv_class allows Automorphisms, perform the first phase
       for (auto& word : harvested_words) {
+        if (word == u) {
+          continue;
+        }
         new_tuples.emplace_back(CWordTuple<2>{v, word});
         new_tuples.back() = ConjugationInverseFlipNormalForm(new_tuples.back());
         state_dump.DumpHarvestEdge(uv_pair, new_tuples.back(), is_flipped);
+      }
 
-        if (use_automorphisms) {
-          auto harvested_tuple = new_tuples.back();
-          new_tuples.back() = WhitheadMinLengthTuple(new_tuples.back());
-          new_tuples.back() = ConjugationInverseFlipNormalForm(new_tuples.back());
-          state_dump.DumpAutomorphEdge(harvested_tuple, new_tuples.back());
+      if (use_automorphisms) {
+        for (auto& new_tuple : new_tuples) {
+          auto normalized_tuple = WhitheadMinLengthTuple(new_tuple);
+          normalized_tuple = ConjugationInverseFlipNormalForm(normalized_tuple);
+          if (normalized_tuple != new_tuple) {
+            state_dump.DumpAutomorphEdge(new_tuple, normalized_tuple, false);
+            new_tuple = normalized_tuple;
+          }
         }
       }
 
@@ -260,17 +267,23 @@ void EnumerateAC(path config_path) {
           std::set<CWordTuple<2>> minimal_orbit = {tuple};
           CompleteWithShortestAutoImages(&minimal_orbit);
 
+          auto min_tuple = tuple;
+
           for (auto image : minimal_orbit) {
             image = ConjugationInverseFlipNormalForm(image);
             uv_class->AddPair(image);
+
+            //all pairs in the min orbit are added to index so that later we could check fast a non-auto-normalized pair
             ac_index.emplace(image, uv_class);
-            if (image < tuple) {
-              tuple = image;
+            if (image < min_tuple) {
+              min_tuple = image;
             }
           }
 
           for (const auto& image : minimal_orbit) {
-            state_dump.DumpAutomorphEdge(image, tuple);
+            if (min_tuple != image) {
+              state_dump.DumpAutomorphEdge(min_tuple, image, true);
+            }
           }
           to_process.Push(tuple, true);
         } else {
