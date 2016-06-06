@@ -153,9 +153,12 @@ void EnumerateAC(path config_path) {
   } else {
     for (auto&& c : ac_classes) {
       to_process.Push(c.minimal(), false);
-      c.DescribeForLog(&std::clog);
-      std::clog << "\n";
     }
+  }
+
+  for (auto&& c : ac_classes) {
+    c.DescribeForLog(&std::clog);
+    std::clog << "\n";
   }
 
 
