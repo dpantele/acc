@@ -50,20 +50,35 @@ void ACStateDump::DumpVertexHarvest(const ACPair& v, unsigned int harvest_limit,
   fmt::print(ac_graph_vertex_harvest_, " {:2} {}\n", harvest_limit, complete_count);
 }
 
+static constexpr unsigned LengthToWidth(unsigned short length) {
+  //length is actually width in base-4 system
+  //each base-16 digit is 2 base-4 digit
+  //hence the width is
+  return length == 0 ? 1u : (length + 1u) / 2u;
+}
+
 void ACStateDump::DumpPair(const ACPair& p, std::ostream* out) {
   auto first_dump = p[0].GetDump();
   auto second_dump = p[1].GetDump();
 
-  fmt::print(*out, "{:02}:{:02}:{:02}:{:x}:{:x}", p.length(), first_dump.length, second_dump.length, first_dump.letters, second_dump.letters);
+  fmt::print(*out,
+      "{0:02}:{1:02}:{2:02}:{3:0{4}x}:{5:0{6}x}",
+      p.length(),
+      first_dump.length, second_dump.length,
+      first_dump.letters, LengthToWidth(first_dump.length),
+      second_dump.letters, LengthToWidth(second_dump.length));
 }
-
-
 
 void ACStateDump::DumpPair(const ACPair& p, fmt::MemoryWriter* out) {
   auto first_dump = p[0].GetDump();
   auto second_dump = p[1].GetDump();
 
-  out->write("{:02}:{:02}:{:02}:{:x}:{:x}", p.length(), first_dump.length, second_dump.length, first_dump.letters, second_dump.letters);
+  out->write(
+      "{0:02}:{1:02}:{2:02}:{3:0{4}x}:{5:0{6}x}",
+      p.length(),
+      first_dump.length, second_dump.length,
+      first_dump.letters, LengthToWidth(first_dump.length),
+      second_dump.letters, LengthToWidth(second_dump.length));
 }
 
 void ACStateDump::DumpHarvestEdge(const ACPair& from, const ACPair& to, bool from_is_flipped) {
