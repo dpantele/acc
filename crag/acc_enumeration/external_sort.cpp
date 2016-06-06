@@ -128,10 +128,11 @@ void ExternalSort(const fs::path& input_path, const fs::path& output_path, const
 
     //and then spawn an async task
     chunks_sorts_results.push_back(executor.async(
-        [compress, &temp_dir, &write_failed, &write_error] (std::vector<std::string> lines) {
+        [compress, &temp_dir, &write_failed, &write_error, &input_path] (std::vector<std::string> lines) {
       std::sort(lines.begin(), lines.end());
 
       auto chunk_path = temp_dir / "sort";
+      chunk_path += input_path.stem();
       chunk_path += fs::unique_path();
       fs::ofstream chunk_file(chunk_path, compress ? (std::ios::out | std::ios::binary) : std::ios::out);
 
@@ -165,6 +166,9 @@ void ExternalSort(const fs::path& input_path, const fs::path& output_path, const
   for (auto&& fut : chunks_sorts_results) {
     chunks_paths.push_back(fut.get());
   }
+
+  input.reset();
+  input_file.close();
 
   struct RemoveTempChunks {
     std::vector<fs::path>& paths_;
@@ -216,9 +220,9 @@ void ExternalSort(const fs::path& input_path, const fs::path& output_path, const
       top_lines.pop_back();
     }
   }
-  std::make_heap(top_lines.begin(), top_lines.end());
+  std::make_heap(top_lines.begin(), top_lines.end(), std::greater<std::pair<std::string, size_t>>());
   while (!top_lines.empty()) {
-    std::pop_heap(top_lines.begin(), top_lines.end());
+    std::pop_heap(top_lines.begin(), top_lines.end(), std::greater<std::pair<std::string, size_t>>());
     output.write(top_lines.back().first.c_str(), top_lines.back().first.size());
     output.put('\n');
     if (output.fail()) {
@@ -230,7 +234,7 @@ void ExternalSort(const fs::path& input_path, const fs::path& output_path, const
       chunks[top_lines.back().second].reset();
       top_lines.pop_back();
     } else {
-      std::push_heap(top_lines.begin(), top_lines.end());
+      std::push_heap(top_lines.begin(), top_lines.end(), std::greater<std::pair<std::string, size_t>>());
     }
   }
 }
