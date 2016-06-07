@@ -216,6 +216,16 @@ class SharedQueue
     return true;
   }
 
+  bool TryPush(T&& val) {
+    if (!space_available_.tryWait()) {
+      return false;
+    }
+
+    DoPush(val);
+
+    return true;
+  }
+
   //! Returns false if queue is closed
   bool Pop(T& val) {
     if (!elements_available_.tryWait()) {
@@ -224,26 +234,15 @@ class SharedQueue
         elements_available_.wait();
       }
     }
-    for(auto i = 0u;; ++i) {
-      // dequeue returns false if the first element is ready
-      // that means that queue is empty (but then elements_available_ should not have fired
-      // except when queue is closed) or that second element became ready before the first
-      // so we will just wait until the first element becomes ready
-      if (queue_.dequeue(val)) {
-        DecElemCount();
-        space_available_.signal();
-        return true;
-      } else if ((push_state_.load(std::memory_order_relaxed) & (kClosedMask | kPushCountMask)) == 1u) {
-        // if all elements were pushed already, then we may return right now
-        // try to awake someone else
-        // since queue is empty and hence a nothing-to-wait now
-        elements_available_.signal(1);
-        return false;
-      }
-      if (i > 10000u) {
-        std::this_thread::yield();
-      }
+    return DoPop(val);
+  }
+
+  bool TryPop(T& val) {
+    if (!elements_available_.tryWait()) {
+      return false;
     }
+
+    return DoPop(val);
   }
 
   size_t ApproximateCount() const {
@@ -333,6 +332,31 @@ class SharedQueue
       }
     }
   }
+
+  bool DoPop(T& val) {
+    for(auto i = 0u;; ++i) {
+      // dequeue returns false if the first element is ready
+      // that means that queue is empty (but then elements_available_ should not have fired
+      // except when queue is closed) or that second element became ready before the first
+      // so we will just wait until the first element becomes ready
+      if (queue_.dequeue(val)) {
+        DecElemCount();
+        space_available_.signal();
+        return true;
+      } else if ((push_state_.load(std::__1::memory_order_relaxed) & (kClosedMask | kPushCountMask)) == 1u) {
+        // if all elements were pushed already, then we may return right now
+        // try to awake someone else
+        // since queue is empty and hence a nothing-to-wait now
+        elements_available_.signal(1);
+        return false;
+      }
+      if (i > 10000u) {
+        std::this_thread::yield();
+      }
+    }
+  }
+
+
 };
 
 }} //crag::multithreading
