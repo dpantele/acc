@@ -24,7 +24,9 @@ void InitOstream(const Config& c, std::initializer_list<std::pair<path, BoostFil
   }
 }
 
-ACStateDump::ACStateDump(const Config& c) {
+ACStateDump::ACStateDump(const Config& c)
+  : write_tasks_(c.dump_queue_limit_)
+{
   fs::create_directories(c.dump_dir());
 
   InitOstream(c, {
@@ -35,19 +37,37 @@ ACStateDump::ACStateDump(const Config& c) {
       {c.pairs_queue_dump(), &pairs_queue_},
       {c.pairs_classes_dump(), &ac_pair_class_},
   });
+
+  writer_ = std::thread([this] {
+    ACStateDump::WriteTask task;
+    while (write_tasks_.Pop(task)) {
+      task.out_->write(task.data_.c_str(), task.data_.size());
+    }
+  });
+}
+
+ACStateDump::~ACStateDump() {
+  write_tasks_.Close();
+  writer_.join();
 }
 
 void ACStateDump::Merge(const ACClass& a, const ACClass& b) {
-  fmt::print(classes_merges_out_, "{} {}\n", a.id_, b.id_);
+  Write(classes_merges_out_, [&](fmt::MemoryWriter& data) {
+    data.write("{} {}\n", a.id_, b.id_);
+  });
 }
 
 void ACStateDump::NewMinimum(const ACClass& c, const ACPair& p) {
-  fmt::print(classes_minimums_out_, "{} {} {}\n", c.id_, ToString(p[0]), ToString(p[1]));
+  Write(classes_minimums_out_, [&](fmt::MemoryWriter& data) {
+    data.write("{} {} {}\n", c.id_, ToString(p[0]), ToString(p[1]));
+  });
 }
 
 void ACStateDump::DumpVertexHarvest(const ACPair& v, unsigned int harvest_limit, unsigned int complete_count) {
-  DumpPair(v, &this->ac_graph_vertex_harvest_);
-  fmt::print(ac_graph_vertex_harvest_, " {:2} {}\n", harvest_limit, complete_count);
+  Write(ac_graph_vertex_harvest_, [&](fmt::MemoryWriter& data) {
+    DumpPair(v, &data);
+    data.write(" {:2} {}\n", harvest_limit, complete_count);
+  });
 }
 
 static constexpr unsigned LengthToWidth(unsigned short length) {
@@ -82,26 +102,30 @@ void ACStateDump::DumpPair(const ACPair& p, fmt::MemoryWriter* out) {
 }
 
 void ACStateDump::DumpHarvestEdge(const ACPair& from, const ACPair& to, bool from_is_flipped) {
-  if (from != last_origin_) {
-    last_origin_ = from;
-    ac_graph_edges_.put('\n');
-    DumpPair(from, &this->ac_graph_edges_);
-  }
-  fmt::print(ac_graph_edges_, " ");
-  DumpPair(to, &this->ac_graph_edges_);
-  fmt::print(ac_graph_edges_, " h{:d}", from_is_flipped);
+  Write(ac_graph_edges_, [&](fmt::MemoryWriter& data) {
+    if (from != last_origin_) {
+      last_origin_ = from;
+      data.write("\n");
+      DumpPair(from, &data);
+    }
+    data.write(" ");
+    DumpPair(to, &data);
+    data.write(" h{:d}", from_is_flipped);
+  });
 }
 
 void ACStateDump::DumpAutomorphEdge(const ACPair& from, const ACPair& to, bool inverse) {
   assert(inverse ? from < to : from > to);
-  if (from != last_origin_) {
-    last_origin_ = from;
-    ac_graph_edges_.put('\n');
-    DumpPair(from, &this->ac_graph_edges_);
-  }
-  fmt::print(ac_graph_edges_, " ");
-  DumpPair(to, &this->ac_graph_edges_);
-  fmt::print(ac_graph_edges_, " a{:d}", inverse);
+  Write(ac_graph_edges_, [&](fmt::MemoryWriter& data) {
+    if (from != last_origin_) {
+      last_origin_ = from;
+      data.write("\n");
+      DumpPair(from, &data);
+    }
+    data.write(" ");
+    DumpPair(to, &data);
+    data.write(" a{:d}", inverse);
+  });
 }
 
 ACPair ACStateDump::LoadPair(const std::string& pair_dump) {
@@ -133,13 +157,17 @@ ACPair ACStateDump::LoadPair(const std::string& pair_dump) {
 }
 
 void ACStateDump::DumpPairQueueState(const ACPair& pair, PairQueueState state) {
-  DumpPair(pair, &pairs_queue_);
-  fmt::print(pairs_queue_, " {} {:x}\n", static_cast<int>(state), ++queue_index_);
+  Write(pairs_queue_, [&](fmt::MemoryWriter& data) {
+    DumpPair(pair, &data);
+    data.write(" {} {:x}\n", static_cast<int>(state), ++queue_index_);
+  });
 }
 
 void ACStateDump::DumpPairClass(const ACPair& p, const ACClass& c) {
-  DumpPair(p, &ac_pair_class_);
-  fmt::print(ac_pair_class_, " {}\n", c.id_);
+  Write(ac_pair_class_, [&](fmt::MemoryWriter& data) {
+    DumpPair(p, &data);
+    data.write(" {}\n", c.id_);
+  });
 }
 
 constexpr const char* ACStateDump::pair_dump_re;

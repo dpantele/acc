@@ -130,6 +130,8 @@ struct Config {
 
   size_t memory_limit_ = 0u;
 
+  size_t dump_queue_limit_ = (1u << 13);
+
   Config()
       : base_dir_(boost::filesystem::current_path())
   { }
@@ -139,6 +141,7 @@ struct Config {
     // base_dir is not dumped, because in general it should be derived from the config path
     dump["dump_dir"] = dump_dir_.generic_string();
     dump["dump_memory_limit"] = ToHumanReadableByteCount(memory_limit_);
+    dump["dump_queue_limit"] = std::to_string(dump_queue_limit_);
     dump["input"] = input_.generic_string();
     return dump.dump(4);
   }
@@ -154,6 +157,16 @@ struct Config {
     ConfigFromJson(config, "dump_memory_limit", &temp);
     if (!temp.empty()) {
       memory_limit_ = FromHumanReadableByteCount(temp);
+      temp.clear();
+    }
+
+    ConfigFromJson(config, "dump_queue_limit", &temp);
+    if (!temp.empty()) {
+      dump_queue_limit_ = std::stoul(temp);
+      if ((dump_queue_limit_ & (dump_queue_limit_ - 1)) != 0u) {
+        throw std::runtime_error("dump_queue_limit must be a power of 2");
+      }
+      temp.clear();
     }
   }
 

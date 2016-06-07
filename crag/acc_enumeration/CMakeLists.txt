@@ -37,6 +37,7 @@ target_link_libraries(acc_enumerate_utils
     crag_folded_graph
     crag_folded_graph_complete
     crag_folded_graph_harvest
+    crag_multithreading
     disjoint_subsets
 )
 
