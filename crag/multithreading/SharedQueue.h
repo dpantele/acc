@@ -27,7 +27,6 @@ class mpmc_bounded_queue
       : buffer_(new cell_t [buffer_size])
       , buffer_mask_(buffer_size - 1)
   {
-    static_assert(std::is_nothrow_move_assignable<T>::value, "T must allow no-throw assignment");
     assert((buffer_size >= 2) &&
         ((buffer_size & (buffer_size - 1)) == 0));
     for (size_t i = 0; i != buffer_size; i += 1)
@@ -39,12 +38,23 @@ class mpmc_bounded_queue
   mpmc_bounded_queue(mpmc_bounded_queue const&) = delete;
   void operator = (mpmc_bounded_queue const&) = delete;
 
+  mpmc_bounded_queue(mpmc_bounded_queue&& other)
+      : buffer_(other.buffer_)
+      , buffer_mask_(other.buffer_mask_)
+      , enqueue_pos_(other.enqueue_pos_.load(std::memory_order_relaxed))
+      , dequeue_pos_(other.dequeue_pos_.load(std::memory_order_relaxed))
+  {
+    other.buffer_ = nullptr;
+  }
+
+  mpmc_bounded_queue& operator=(mpmc_bounded_queue&& other) = delete;
+
   ~mpmc_bounded_queue()
   {
     delete [] buffer_;
   }
 
-  bool enqueue(T const& data)
+  bool enqueue(T&& data)
   {
     cell_t* cell;
     size_t pos = enqueue_pos_.load(std::memory_order_relaxed);
@@ -65,7 +75,7 @@ class mpmc_bounded_queue
       else
         pos = enqueue_pos_.load(std::memory_order_relaxed);
     }
-    cell->data_ = data;
+    cell->data_ = std::move(data);
     cell->sequence_.store(pos + 1, std::memory_order_release);
     return true;
   }
@@ -91,7 +101,7 @@ class mpmc_bounded_queue
       else
         pos = dequeue_pos_.load(std::memory_order_relaxed);
     }
-    data = cell->data_;
+    data = std::move(cell->data_);
     cell->sequence_.store
         (pos + buffer_mask_ + 1, std::memory_order_release);
     return true;
@@ -141,7 +151,7 @@ class mpmc_bounded_queue
   typedef char            cacheline_pad_t [cacheline_size];
 
   cacheline_pad_t         pad0_;
-  cell_t* const           buffer_;
+  cell_t*                 buffer_;
   size_t const            buffer_mask_;
   cacheline_pad_t         pad1_;
   std::atomic<size_t>     enqueue_pos_;
@@ -158,10 +168,22 @@ class SharedQueue
 {
  public:
   SharedQueue(size_t size)
-    : queue_(size)
+    : size_(size)
+    , queue_(size)
     , space_available_(static_cast<int>(size))
     , elements_available_(0)
   { }
+
+  SharedQueue(SharedQueue&& other)
+    : size_(other.size_)
+    , queue_(std::move(other.queue_))
+    , push_state_(other.push_state_.load(std::memory_order_relaxed))
+    , space_available_(other.space_available_.approximateCount())
+    , elements_available_(other.elements_available_.approximateCount())
+  {
+    assert(space_available_.approximateCount() >= 0);
+    assert(elements_available_.approximateCount() >= 0);
+  }
 
   //! Blocks if no space is available
   void Push(T val) {
@@ -235,6 +257,7 @@ class SharedQueue
     }
   }
  private:
+  size_t size_;
   internal::mpmc_bounded_queue<T> queue_;
 
   static constexpr uint64_t kClosedMask = 1u;
@@ -254,7 +277,7 @@ class SharedQueue
       // or that someone have popped an element not from the end
       // the last element is being popped in some thread which was paused
       // so we will just wait until that thread wakes up
-      if (queue_.enqueue(val)) {
+      if (queue_.enqueue(std::move(val))) {
         elements_available_.signal();
         break;
       } else {

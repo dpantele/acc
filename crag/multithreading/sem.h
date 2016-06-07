@@ -226,6 +226,10 @@ public:
         }
     }
 
+    int approximateCount() {
+        return m_count.load(std::memory_order_relaxed);
+    }
+
     // makes sure that all sleeping threads are waked up after this call, and semaphore had value at least n
     void signalAndWakeAll(int n = 0) {
         int oldCount = m_count.load(std::memory_order_relaxed);
