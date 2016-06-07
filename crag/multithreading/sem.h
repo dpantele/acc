@@ -226,7 +226,7 @@ public:
         }
     }
 
-    int approximateCount() {
+    int approximateCount() const {
         return m_count.load(std::memory_order_relaxed);
     }
 

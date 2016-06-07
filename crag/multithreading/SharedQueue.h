@@ -230,6 +230,7 @@ class SharedQueue
       // except when queue is closed) or that second element became ready before the first
       // so we will just wait until the first element becomes ready
       if (queue_.dequeue(val)) {
+        DecElemCount();
         space_available_.signal();
         return true;
       } else if ((push_state_.load(std::memory_order_relaxed) & (kClosedMask | kPushCountMask)) == 1u) {
@@ -245,6 +246,14 @@ class SharedQueue
     }
   }
 
+  size_t ApproximateCount() const {
+    auto count = elements_available_.approximateCount();
+    if (count > 0) {
+      return static_cast<size_t>(count);
+    }
+    return 0u;
+  }
+
   //! Signal that there will be no more extra pushes
   /**
    * Push after Close is undefined behaviour
@@ -256,6 +265,15 @@ class SharedQueue
       elements_available_.signalAndWakeAll(1);
     }
   }
+
+  size_t MaxCount() const {
+    return max_count_.load(std::memory_order_relaxed);
+  }
+
+  size_t MaxCountIsSizeTimes() const {
+    return count_times_is_max_.load(std::memory_order_relaxed);
+  }
+
  private:
   size_t size_;
   internal::mpmc_bounded_queue<T> queue_;
@@ -263,9 +281,35 @@ class SharedQueue
   static constexpr uint64_t kClosedMask = 1u;
   static constexpr uint64_t kPushCountIncrement = (1ull << 1);
   static constexpr uint64_t kPushCountMask = (~0u << 1);
-  std::atomic<uint64_t> push_state_{0};
+
   // the lower bit is an indicator if Close() was called
   // and the rest is the number of Pushes active
+  std::atomic<uint64_t> push_state_{0};
+
+  std::atomic_size_t max_count_{0};
+  std::atomic_size_t count_{0};
+  std::atomic_size_t count_times_is_max_{0};
+
+//  void UpdateMax(size_t new_count) {
+//    size_t last_max = max_count_.load(std::memory_order_relaxed);
+//    while (last_max < new_count && max_count_.compare_exchange_weak(last_max, new_count, std::memory_order_relaxed));
+//    if (new_count >= size_) {
+//      count_times_is_max_.fetch_add(1, std::memory_order_relaxed);
+//    }
+//  }
+//
+//  void IncElemCount() {
+//    auto val = count_.fetch_add(1, std::memory_order_relaxed);
+//    UpdateMax(val + 1);
+//  }
+//  void DecElemCount() {
+//    count_.fetch_sub(1, std::memory_order_relaxed);
+//  }
+
+  void IncElemCount() {
+  }
+  void DecElemCount() {
+  }
 
   DefaultSemaphoreType space_available_;
   DefaultSemaphoreType elements_available_;
@@ -278,6 +322,7 @@ class SharedQueue
       // the last element is being popped in some thread which was paused
       // so we will just wait until that thread wakes up
       if (queue_.enqueue(std::move(val))) {
+        IncElemCount();
         elements_available_.signal();
         break;
       } else {

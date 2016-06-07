@@ -43,6 +43,8 @@ ACStateDump::ACStateDump(const Config& c)
     while (write_tasks_.Pop(task)) {
       task.out_->write(task.data_.c_str(), task.data_.size());
     }
+//    std::clog << "Max queue size: " << write_tasks_.MaxCount()
+//        << "\nCount times blocked: " << write_tasks_.MaxCountIsSizeTimes() << "\n";
   });
 }
 
