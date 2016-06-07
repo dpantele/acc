@@ -9,6 +9,8 @@
 #include <regex>
 #include <string>
 
+#include <boost/variant.hpp>
+
 #include <fmt/format.h>
 #include <fmt/ostream.h>
 
@@ -20,6 +22,7 @@
 
 #include "acc_class.h"
 #include "acc_classes.h"
+#include "ACPairProcessQueue.h"
 #include "Terminator.h"
 
 using namespace crag;
@@ -46,37 +49,6 @@ std::vector<ACPair> LoadInput(const Config& c) {
 
   return result;
 }
-
-class ACPairProcessQueue {
- public:
-  ACPairProcessQueue(const Config&, ACStateDump* state_dump)
-      : state_dump_(state_dump)
-  { }
-
-  std::pair<ACPair, bool> Pop() {
-    auto next_pair = *to_process.begin();
-    to_process.erase(to_process.begin());
-    state_dump_->DumpPairQueueState(next_pair.first, ACStateDump::PairQueueState::Popped);
-    return next_pair;
-  }
-
-  void Push(ACPair pair, bool is_aut_normalized) {
-    to_process.emplace(pair, is_aut_normalized);
-    state_dump_->DumpPairQueueState(pair, is_aut_normalized ? ACStateDump::PairQueueState::AutoNormalized : ACStateDump::PairQueueState::Pushed);
-  }
-
-  bool IsEmpty() const {
-    return to_process.empty();
-  }
-
-  size_t GetSize() const {
-    return to_process.size();
-  }
-
- private:
-  std::map<ACPair, bool> to_process;
-  ACStateDump* state_dump_;
-};
 
 void EnumerateAC(path config_path) {
   Terminator t;
@@ -308,21 +280,26 @@ void EnumerateAC(path config_path) {
   auto processed_count = 0u;
 
   while (!to_process.IsEmpty() && !t.ShouldTerminate()) {
-    auto current_pair = to_process.Pop();
-    process(current_pair.first, current_pair.second);
-    state_dump.DumpPairQueueState(current_pair.first, ACStateDump::PairQueueState::Harvested);
+    std::pair<ACPair, bool> current_pair;
+    if (to_process.Pop(current_pair)) {
+      process(current_pair.first, current_pair.second);
+      state_dump.DumpPairQueueState(current_pair.first, ACStateDump::PairQueueState::Harvested);
 
-    if (++processed_count % 1000 == 0) {
-      std::clog << processed_count << "/" << to_process.GetSize() << "/" << ac_index.size() <<"\n";
-      for (auto&& c : ac_classes) {
-        if (c.IsPrimary()) {
-          c.DescribeForLog(&std::clog);
-          std::clog << "\n";
+      if (++processed_count % 1000 == 0) {
+        std::clog << processed_count << "/" << to_process.GetSize() << "/" << ac_index.size() << "\n";
+        for (auto&& c : ac_classes) {
+          if (c.IsPrimary()) {
+            c.DescribeForLog(&std::clog);
+            std::clog << "\n";
+          }
         }
       }
     }
   }
-  std::clog << "Enumeration stopped" << std::endl;
+  if (t.ShouldTerminate()) {
+    to_process.Terminate();
+  }
+  std::clog << "Enumeration stopped, wait till dump is synchronized" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
@@ -331,6 +308,8 @@ int main(int argc, char* argv[]) {
   }
 
   EnumerateAC(argv[1]);
+
+  std::clog << "Dump is syncronized, it is safe to interrupt process now" << std::endl;
 
   //then exec the cleanup script
   std::clog << "Running dumps cleanup" << std::endl;

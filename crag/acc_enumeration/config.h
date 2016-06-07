@@ -13,6 +13,7 @@
 #include <nlohmann/json.hpp>
 #include <fmt/format.h>
 #include <fmt/ostream.h>
+#include <thread>
 
 #include "boost_filtering_stream.h"
 #include "convert_byte_count.h"
@@ -132,6 +133,11 @@ struct Config {
 
   size_t dump_queue_limit_ = (1u << 13);
 
+  size_t workers_count_ = std::thread::hardware_concurrency();
+
+  static constexpr float kFractionNotUsed = -1.0f;
+  float workers_count_fraction_ = kFractionNotUsed;
+
   Config()
       : base_dir_(boost::filesystem::current_path())
   { }
@@ -143,6 +149,12 @@ struct Config {
     dump["dump_memory_limit"] = ToHumanReadableByteCount(memory_limit_);
     dump["dump_queue_limit"] = std::to_string(dump_queue_limit_);
     dump["input"] = input_.generic_string();
+
+    if (workers_count_fraction_ == kFractionNotUsed) {
+      dump["workers_count"] = std::to_string(workers_count_);
+    } else {
+      dump["workers_count"] = fmt::format("{:.3}", workers_count_fraction_);
+    }
     return dump.dump(4);
   }
 
@@ -165,6 +177,21 @@ struct Config {
       dump_queue_limit_ = std::stoul(temp);
       if ((dump_queue_limit_ & (dump_queue_limit_ - 1)) != 0u) {
         throw std::runtime_error("dump_queue_limit must be a power of 2");
+      }
+      temp.clear();
+    }
+
+    ConfigFromJson(config, "workers_count", &temp);
+    if (!temp.empty()) {
+      if (temp.find('.') != std::string::npos) {
+        workers_count_fraction_ = std::stof(temp);
+        if (workers_count_fraction_ > 1.5 || workers_count_fraction_ <= 0) {
+          throw std::runtime_error(fmt::format("It is likely a mistake to put {} as a workers count hardware concurrency fraction", workers_count_fraction_));
+        }
+        workers_count_ = static_cast<size_t>(std::lround(workers_count_fraction_ * std::thread::hardware_concurrency()));
+      } else {
+        workers_count_fraction_ = kFractionNotUsed;
+        workers_count_ = std::stoul(temp);
       }
       temp.clear();
     }

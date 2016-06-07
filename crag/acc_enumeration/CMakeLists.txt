@@ -44,11 +44,13 @@ target_link_libraries(acc_enumerate_utils
 # target_compile_options(acc_enumerate_utils PUBLIC -g -O1)
 
 add_executable(crag.acc_enumeration.acc_enumerate
+    ACPairProcessQueue.h
     acc_enumerate.cpp
     )
 
 target_link_libraries(crag.acc_enumeration.acc_enumerate PRIVATE
     acc_enumerate_utils
+    crag_multithreading
 )
 
 add_executable(crag.acc_enumeration.dump_cleanup
