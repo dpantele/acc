@@ -9,14 +9,14 @@ namespace {
 TEST(DisjointSubset, SingleElem) {
   DisjointSubset<int> a(3);
 
-  EXPECT_EQ(1, a.size());
+  EXPECT_EQ(1u, a.size());
   EXPECT_EQ(3, a.root());
 }
 
 TEST(DisjointSubset, Null) {
   DisjointSubset<int> a(nullptr);
 
-  EXPECT_EQ(0, a.size());
+  EXPECT_EQ(0u, a.size());
   EXPECT_EQ(int(), a.root());
 }
 
@@ -33,7 +33,7 @@ struct A {
 TEST(DisjointSubset, NoConsturct) {
   DisjointSubset<A> a(1);
 
-  EXPECT_EQ(1, a.size());
+  EXPECT_EQ(1u, a.size());
   EXPECT_EQ(1, a.root().a_);
 }
 
@@ -51,7 +51,7 @@ struct NonCopyable {
 TEST(DisjointSubset, PlacementConstruct) {
   DisjointSubset<NonCopyable> a(1);
 
-  EXPECT_EQ(1, a.size());
+  EXPECT_EQ(1u, a.size());
   EXPECT_EQ(1, a.root().a_);
 }
 
@@ -62,9 +62,9 @@ TEST(DisjointSubset, Merge) {
 
   EXPECT_EQ(1, Merge(&a, &b));
 
-  EXPECT_EQ(2, a.size());
+  EXPECT_EQ(2u, a.size());
   EXPECT_EQ(1, a.root());
-  EXPECT_EQ(2, b.size());
+  EXPECT_EQ(2u, b.size());
   EXPECT_EQ(1, b.root());
 }
 
@@ -74,9 +74,9 @@ TEST(DisjointSubset, ConstLabelMerge) {
 
   EXPECT_EQ(1, Merge(&a, &b));
 
-  EXPECT_EQ(2, a.size());
+  EXPECT_EQ(2u, a.size());
   EXPECT_EQ(1, a.root());
-  EXPECT_EQ(2, b.size());
+  EXPECT_EQ(2u, b.size());
   EXPECT_EQ(1, b.root());
 }
 
@@ -86,14 +86,14 @@ TEST(DisjointSubset, ConstSubsetRoot) {
 
   EXPECT_EQ(1, Merge(&a, &b));
 
-  EXPECT_EQ(2, a.size());
+  EXPECT_EQ(2u, a.size());
   EXPECT_EQ(1, a.root());
-  EXPECT_EQ(2, b.size());
+  EXPECT_EQ(2u, b.size());
   EXPECT_EQ(1, b.root());
 
   const DisjointSubset<int>& c = a;
 
-  EXPECT_EQ(2, c.size());
+  EXPECT_EQ(2u, c.size());
   EXPECT_EQ(1, c.root());
 
   //should not compile
@@ -151,7 +151,7 @@ TEST(DisjointSubset, MergeLinearNeighbours) {
 }
 
 TEST(DisjointSubset, MergeBinary) {
-  std::deque<DisjointSubset<int>> elems;
+  std::deque<DisjointSubset<size_t>> elems;
 
   for (auto i = 0u; i < 16; ++i) {
     elems.emplace_back(i);

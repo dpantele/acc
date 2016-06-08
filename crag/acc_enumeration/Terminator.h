@@ -5,6 +5,7 @@
 #ifndef ACC_TERMINATOR_H
 #define ACC_TERMINATOR_H
 
+#include <atomic>
 #include <memory>
 #include <thread>
 #include <vector>

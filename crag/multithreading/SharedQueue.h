@@ -343,7 +343,7 @@ class SharedQueue
         DecElemCount();
         space_available_.signal();
         return true;
-      } else if ((push_state_.load(std::__1::memory_order_relaxed) & (kClosedMask | kPushCountMask)) == 1u) {
+      } else if ((push_state_.load(std::memory_order_relaxed) & (kClosedMask | kPushCountMask)) == 1u) {
         // if all elements were pushed already, then we may return right now
         // try to awake someone else
         // since queue is empty and hence a nothing-to-wait now

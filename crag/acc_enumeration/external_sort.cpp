@@ -68,7 +68,7 @@ class LimitedAsyncExecutor {
     return result;
   }
 
-  const size_t kLimit_;
+  const int kLimit_;
   std::atomic<int> running_count_;
   std::condition_variable thread_available_cv_;
   std::mutex thread_available_lock_;
