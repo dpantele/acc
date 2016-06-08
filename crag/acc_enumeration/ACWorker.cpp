@@ -245,6 +245,8 @@ struct ACWorker {
     ACMMove(pair, false, pair_info, &classes_to_merge, &pairs_to_add, &pairs_to_process);
     ACMMove(pair, true, pair_info, &classes_to_merge, &pairs_to_add, &pairs_to_process);
 
+    state_->data.dump->DumpVertexHarvest(pair, pair_info.harvest_limit, pair_info.complete_count);
+
     //and finally we write the results
     {
       auto final_lock = WritingLock();
