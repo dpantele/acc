@@ -37,7 +37,10 @@ class ACClasses {
   GetInitialACIndex() {
     std::map<ACPair, ACClass*> index;
     for (auto&& c : classes_) {
-      index.emplace(c.minimal(), &c);
+      auto was_inserted = index.emplace(c.minimal(), &c);
+      if (!was_inserted.second) {
+        c.Merge(was_inserted.first->second);
+      }
     }
     return index;
   };
