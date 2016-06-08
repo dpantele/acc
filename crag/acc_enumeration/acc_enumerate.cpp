@@ -80,6 +80,17 @@ void EnumerateAC(path config_path) {
   ACStateDump state_dump(config);
 
   ACClasses ac_classes(config, &state_dump);
+
+  ACPair trivial_pair{CWord("x"), CWord("y")};
+
+  // these are trivial classes which should be excluded from harvest since
+  ac_classes.AddClass(trivial_pair);
+
+  ACClass* trivial_class = ac_classes.at(0);
+  for (auto i = 1u; i <= 3u; ++i) {
+    trivial_class->Merge(ac_classes.at(i));
+  }
+
   ac_classes.AddClasses(inputs);
   ac_classes.RestoreMerges();
   ac_classes.RestoreMinimums();

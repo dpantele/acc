@@ -17,6 +17,7 @@ using namespace crag;
 
 struct WorkersSharedState {
   ACTasksData data;
+  ACClass* trivial_class;
 
   //data.ac_index (and uv_classes we get from it), index_size and processed count may be changed only under reader lock
   //data.ac_index, uv_classes may be viewed only after getting a reading lock
@@ -62,6 +63,7 @@ struct ACWorker {
   struct PairInfo {
     ACClass* p_class;
     bool use_automorphisms;
+    bool is_trivial;
     CWord::size_type harvest_limit;
     unsigned short complete_count;
   };
@@ -69,7 +71,8 @@ struct ACWorker {
   PairInfo GetPairInfo(const ACPair& p) {
     auto lock = ReadingLock();
     auto pair_class = state_->data.ac_index->at(p);
-    return PairInfo{pair_class, pair_class->AllowsAutMoves(), MaxHarvestLength(*pair_class), 2};
+    return PairInfo{pair_class, pair_class->AllowsAutMoves(), pair_class->IsMergedWith(*state_->trivial_class),
+        MaxHarvestLength(*pair_class), 2};
   }
 
   bool AutMinIsInIndex(const ACPair& pair) {
@@ -220,6 +223,16 @@ struct ACWorker {
 
   void Process(ACPair pair, bool was_aut_normalized) {
     auto pair_info = GetPairInfo(pair);
+
+    if (pair_info.is_trivial) {
+      return ProcessedStats(pair, WritingLock());
+    }
+    if (Length(pair) < 13 || pair[0].size() < 4) {
+      // pair is certainly trivial
+      auto writer = WritingLock();
+      pair_info.p_class->Merge(state_->trivial_class);
+      return ProcessedStats(pair, std::move(writer));
+    }
     if (pair_info.use_automorphisms && !was_aut_normalized
         && AutMinIsInIndex(pair)) {
       return ProcessedStats(pair, WritingLock());
@@ -261,7 +274,7 @@ struct ACWorker {
 };
 
 void Process(const ACTasksData& data) {
-  WorkersSharedState state{data};
+  WorkersSharedState state{data, data.ac_index->at(ACPair{CWord("x"), CWord("y")})};
 
   std::deque<ACWorker> workers;
   while(workers.size() < data.config.workers_count_) {

@@ -68,6 +68,10 @@ struct ACClass {
     return canonical_.IsRoot();
   }
 
+  bool IsMergedWith(const ACClass& other) const {
+    return canonical_ == other.canonical_;
+  }
+
   ACClass(size_t id, ACPair pair, AutKind kind, ACStateDump* logger);
 
   void AddPair(ACPair pair);
