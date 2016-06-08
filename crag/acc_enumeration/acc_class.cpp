@@ -8,7 +8,7 @@
 #include "state_dump.h"
 
 
-void ACClass::DescribeForLog(std::ostream* out) {
+void ACClass::DescribeForLog(std::ostream* out) const {
   *out << "Class " << initial_ << "(";
   switch(init_kind_) {
     case AutKind::Ident:

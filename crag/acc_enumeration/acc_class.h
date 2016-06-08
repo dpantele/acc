@@ -48,7 +48,7 @@ struct ACClass {
   size_t pairs_count_ = 0u;
 
   //! Simple way to print the state of the class, single-line
-  void DescribeForLog(std::ostream* out);
+  void DescribeForLog(std::ostream* out) const;
 
   //! Get the 'canonical' representative for the class
   const crag::CWordTuple<2>& minimal() const {
