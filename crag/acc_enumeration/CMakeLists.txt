@@ -3,8 +3,8 @@ cmake_minimum_required(VERSION 3.2)
 hunter_add_package(fmt)
 find_package(fmt CONFIG REQUIRED)
 
-hunter_add_package(Boost COMPONENTS filesystem iostreams system)
-find_package(Boost CONFIG REQUIRED filesystem iostreams system)
+hunter_add_package(Boost COMPONENTS filesystem iostreams system thread)
+find_package(Boost CONFIG REQUIRED filesystem iostreams system thread)
 
 hunter_add_package(nlohmann-json)
 find_package(nlohmann-json REQUIRED)
@@ -46,9 +46,11 @@ target_link_libraries(acc_enumerate_utils
 add_executable(crag.acc_enumeration.acc_enumerate
     ACPairProcessQueue.h
     acc_enumerate.cpp
-    )
+    ACWorker.cpp ACWorker.h)
 
 target_link_libraries(crag.acc_enumeration.acc_enumerate PRIVATE
+    Boost::thread
+
     acc_enumerate_utils
     crag_multithreading
 )

@@ -11,6 +11,8 @@
 #include "state_dump.h"
 #include "config.h"
 
+using ACIndex = std::map<ACPair, ACClass*>;
+
 class ACClasses {
  public:
   ACClasses(const Config& c, ACStateDump* logger)
@@ -31,7 +33,7 @@ class ACClasses {
   void RestoreMerges();
   void RestoreMinimums();
 
-  std::map<ACPair, ACClass*>
+  ACIndex
   GetInitialACIndex() {
     std::map<ACPair, ACClass*> index;
     for (auto&& c : classes_) {
@@ -45,8 +47,18 @@ class ACClasses {
     return classes_.begin();
   }
 
+  std::deque<ACClass>::const_iterator
+  begin() const {
+    return classes_.begin();
+  }
+
   std::deque<ACClass>::iterator
   end() {
+    return classes_.end();
+  }
+
+  std::deque<ACClass>::const_iterator
+  end() const {
     return classes_.end();
   }
 

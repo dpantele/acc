@@ -47,7 +47,7 @@ struct ACStateDump {
     Pushed = (1 << 0),
     AutoNormalized = (1 << 1),
     Popped = (1 << 2),
-    Harvested = (1 << 3),
+    Processed = (1 << 3),
   };
 
   void DumpPairQueueState(const ACPair& pair, PairQueueState state);

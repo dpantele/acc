@@ -3,27 +3,28 @@
 //
 
 #include <bitset>
+#include <cassert>
+#include <fstream>
 #include <map>
-
 #include <ostream>
 #include <regex>
 #include <string>
 
 #include <boost/variant.hpp>
 
+#include <crag/folded_graph/complete.h>
+#include <crag/folded_graph/folded_graph.h>
+#include <crag/folded_graph/harvest.h>
+#include <crag/compressed_word/tuple_normal_form.h>
+
 #include <fmt/format.h>
 #include <fmt/ostream.h>
-
-#include <folded_graph/complete.h>
-#include <folded_graph/folded_graph.h>
-#include <folded_graph/harvest.h>
-#include <compressed_word/tuple_normal_form.h>
-#include <fstream>
 
 #include "acc_class.h"
 #include "acc_classes.h"
 #include "ACPairProcessQueue.h"
 #include "Terminator.h"
+#include "ACWorker.h"
 
 using namespace crag;
 
@@ -133,172 +134,17 @@ void EnumerateAC(path config_path) {
     std::clog << "\n";
   }
 
-
-  auto MaxHarvestLength = [](const ACClass& c) {
-    return static_cast<CWord::size_type>(c.minimal()[0].size() + c.minimal()[1].size());
+  ACTasksData data{
+      config      , // const Config& config;
+      t           , // const Terminator& terminator;
+      &to_process , // ACPairProcessQueue* queue;
+      &state_dump , // ACStateDump* dump;
+      &ac_index   , // ACIndex* ac_index;
+      ac_classes    // const ACClasses& ac_classes;
   };
 
-  //the main worker function - take a pair and apply an AC-move to it
-  auto process = [&](crag::CWordTuple<2> pair, bool was_aut_normalized) {
-    //each pair has a class to which it belongs
-    auto pair_class = ac_index.at(pair);
-    if(pair_class->AllowsAutMoves() && !was_aut_normalized) {
-      //we have proved that AC moves may be used, but this exact pair was not normalized yet
-
-      //first we find some pair of minimal length
-      auto reduced_pair = WhitheadMinLengthTuple(pair);
-
-      //we also need to find the actual minimal pair
-      if (Length(reduced_pair) < Length(pair)) {
-        reduced_pair = ConjugationInverseFlipNormalForm(reduced_pair);
-      }
-
-      if (reduced_pair != pair && ac_index.count(pair) != 0) {
-        state_dump.DumpAutomorphEdge(pair, reduced_pair, false);
-        return;
-      }
-
-      //if pair still was not processed, we just continue from here
-    }
-
-    //and we perform ACM-moves for (u, v) and for (v, u)
-
-    auto ACMMove = [&](const CWordTuple<2>& uv_pair, bool is_flipped, CWord::size_type harvest_limit,  unsigned short complete_count) {
-      assert(ConjugationInverseFlipNormalForm(uv_pair) == uv_pair);
-
-      const CWord& u = is_flipped ? uv_pair[1] : uv_pair[0];
-      const CWord& v = is_flipped ? uv_pair[0] : uv_pair[1];
-
-      auto uv_class_pos = ac_index.find(uv_pair);
-      assert(uv_class_pos != ac_index.end());
-      ACClass* uv_class = uv_class_pos->second;
-      // we either use automorphisms or don't, we don't start using them after some pair was processed
-      bool use_automorphisms = uv_class->AllowsAutMoves();
-
-      //to make a single ACM-move, first we need to build a FoldedGraph
-      FoldedGraph g;
-
-      //start from a cycle u of weight 1
-      g.PushCycle(u, 1);
-
-      //complete this with v
-      while (complete_count-- > 0) {
-        CompleteWith(v, &g);
-      }
-
-      //harvest all cycles of weight \pm
-      auto harvested_words = Harvest(harvest_limit, 1, &g);
-      std::vector<CWordTuple<2>> new_tuples;
-      new_tuples.reserve(harvested_words.size());
-
-      //they were not cyclically normalized, do it now
-      //also if uv_class allows Automorphisms, perform the first phase
-      for (auto& word : harvested_words) {
-        if (word == u) {
-          continue;
-        }
-        new_tuples.emplace_back(CWordTuple<2>{v, word});
-        new_tuples.back() = ConjugationInverseFlipNormalForm(new_tuples.back());
-        state_dump.DumpHarvestEdge(uv_pair, new_tuples.back(), is_flipped);
-      }
-
-      if (use_automorphisms) {
-        for (auto& new_tuple : new_tuples) {
-          auto normalized_tuple = WhitheadMinLengthTuple(new_tuple);
-          normalized_tuple = ConjugationInverseFlipNormalForm(normalized_tuple);
-          if (normalized_tuple != new_tuple) {
-            state_dump.DumpAutomorphEdge(new_tuple, normalized_tuple, false);
-            new_tuple = normalized_tuple;
-          }
-        }
-      }
-
-      std::sort(new_tuples.begin(), new_tuples.end());
-      auto tuples_end = std::unique(new_tuples.begin(), new_tuples.end());
-
-      auto new_tuple = new_tuples.begin();
-      auto new_tuples_keep = new_tuple;
-
-      while (new_tuple != tuples_end) {
-        auto exists = ac_index.find(*new_tuple);
-        if (exists != ac_index.end()) {
-          //we merge two ac classes
-          uv_class->Merge(exists->second);
-        } else {
-          //we move this pair to the ones which will be kept
-          *new_tuples_keep = *new_tuple;
-          ++new_tuples_keep;
-        }
-        ++new_tuple;
-      }
-
-      new_tuples.erase(new_tuples_keep, new_tuples.end());
-
-      for (auto&& tuple : new_tuples) {
-        if (use_automorphisms) {
-          std::set<CWordTuple<2>> minimal_orbit = {tuple};
-          CompleteWithShortestAutoImages(&minimal_orbit);
-
-          auto min_tuple = tuple;
-
-          for (auto image : minimal_orbit) {
-            image = ConjugationInverseFlipNormalForm(image);
-            uv_class->AddPair(image);
-
-            //all pairs in the min orbit are added to index so that later we could check fast a non-auto-normalized pair
-            ac_index.emplace(image, uv_class);
-            if (image < min_tuple) {
-              min_tuple = image;
-            }
-          }
-
-          for (const auto& image : minimal_orbit) {
-            if (min_tuple != image) {
-              state_dump.DumpAutomorphEdge(min_tuple, image, true);
-            }
-          }
-          to_process.Push(tuple, true);
-        } else {
-          uv_class->AddPair(tuple);
-          ac_index.emplace(tuple, uv_class);
-          to_process.Push(tuple, false);
-        }
-
-      }
-    };
-
-    auto harvest_limit = MaxHarvestLength(*pair_class);
-    unsigned short complete_count = 2;
-
-    ACMMove(pair, false, harvest_limit, complete_count);
-    ACMMove(pair, true, harvest_limit, complete_count);
-
-    // pair was finally processed and should not be retried
-    state_dump.DumpVertexHarvest(pair, harvest_limit, complete_count);
-  };
-
-  auto processed_count = 0u;
-
-  while (!to_process.IsEmpty() && !t.ShouldTerminate()) {
-    std::pair<ACPair, bool> current_pair;
-    if (to_process.Pop(current_pair)) {
-      process(current_pair.first, current_pair.second);
-      state_dump.DumpPairQueueState(current_pair.first, ACStateDump::PairQueueState::Harvested);
-
-      if (++processed_count % 1000 == 0) {
-        std::clog << processed_count << "/" << to_process.GetSize() << "/" << ac_index.size() << "\n";
-        for (auto&& c : ac_classes) {
-          if (c.IsPrimary()) {
-            c.DescribeForLog(&std::clog);
-            std::clog << "\n";
-          }
-        }
-      }
-    }
-  }
-  if (t.ShouldTerminate()) {
-    to_process.Terminate();
-  }
+  Process(data);
+  to_process.Terminate();
   std::clog << "Enumeration stopped, wait till dump is synchronized" << std::endl;
 }
 

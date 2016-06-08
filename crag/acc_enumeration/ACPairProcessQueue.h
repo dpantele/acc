@@ -24,15 +24,14 @@ class ACPairProcessQueue {
         , input_queue_(8192 /*magic size, TODO: replace with auto-resizing queue */)
         , state_dump_(state_dump)
   {
-    queue_processor_ = std::__1::thread([this] {
+    queue_processor_ = std::thread([this] {
       InputMessage next;
 
       while (input_queue_.Pop(next)) {
         if (next.which() == 1) {
           switch (boost::get<Message>(next)) {
             case Message::Popped: {
-              if (!to_process.empty()) {
-                output_queue_.Push(Value(*to_process.begin()));
+              while (!to_process.empty() && output_queue_.TryPush(Value(*to_process.begin()))) {
                 to_process.erase(to_process.begin());
               }
               break;
@@ -54,9 +53,10 @@ class ACPairProcessQueue {
           Value next_as_value = boost::get<Value>(next);
           auto was_inserted = to_process.insert(next_as_value);
           if (!was_inserted.second) {
+            TaskDone();
             was_inserted.first->second |= next_as_value.second;
           }
-          if (output_queue_.TryPush(Value(*to_process.begin()))) {
+          while (!to_process.empty() && output_queue_.TryPush(Value(*to_process.begin()))) {
             to_process.erase(to_process.begin());
           }
         }
@@ -83,6 +83,7 @@ class ACPairProcessQueue {
 
   void Push(ACPair pair, bool is_aut_normalized) {
     state_dump_->DumpPairQueueState(pair, is_aut_normalized ? ACStateDump::PairQueueState::AutoNormalized : ACStateDump::PairQueueState::Pushed);
+    tasks_to_do_.fetch_add(1, std::memory_order_relaxed);
     input_queue_.Push(Value(pair, is_aut_normalized));
   }
 
@@ -91,7 +92,7 @@ class ACPairProcessQueue {
   }
 
   size_t GetSize() const {
-    return to_process.size() + output_queue_.ApproximateCount();
+    return to_process.size() + output_queue_.ApproximateCount() + input_queue_.ApproximateCount();
   }
 
   void Close() {
@@ -103,6 +104,21 @@ class ACPairProcessQueue {
     while (input_queue_.TryPop(m));
     input_queue_.Push(Message::Terminated);
     input_queue_.Close();
+  }
+
+  void TaskDone() {
+    auto result = tasks_to_do_.fetch_sub(1, std::memory_order_relaxed);
+    if (result <= 0) {
+      throw std::runtime_error("TaskDone() is called without an active task");
+    }
+    if (result == 1) {
+      if (!IsEmpty()) {
+        throw std::runtime_error("TaskDone() was not called after some pair was processed");
+      }
+
+      // Closing queue, but actually we could be calling some callbacks
+      Close();
+    }
   }
 
  private:
@@ -119,6 +135,10 @@ class ACPairProcessQueue {
   std::map<ACPair, bool> to_process;
   ACStateDump* state_dump_;
   std::thread queue_processor_;
+
+  // Block so that the queue could be joinable
+  std::atomic_int_fast64_t tasks_to_do_{0};
+
 };
 
 #endif //ACC_ACPAIRPROCESSQUEUE_H

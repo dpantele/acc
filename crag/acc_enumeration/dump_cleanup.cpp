@@ -99,7 +99,7 @@ void ProcessQueue(const Config& c) {
   std::regex queue_sump_line(queue_sump_line_regex_str);
   std::smatch parsed;
   ACPair last_pair;
-  size_t pair_state = static_cast<size_t>(ACStateDump::PairQueueState::Harvested); //we don't write the empty pair back
+  size_t pair_state = static_cast<size_t>(ACStateDump::PairQueueState::Processed); //we don't write the empty pair back
 
   while (std::getline(sorted, next_line)) {
     if (!std::regex_match(next_line, parsed, queue_sump_line)) {
@@ -108,7 +108,7 @@ void ProcessQueue(const Config& c) {
 
     ACPair current = ACStateDump::LoadPair(parsed[1]);
     if (last_pair != current) {
-      if (!(pair_state & static_cast<size_t>(ACStateDump::PairQueueState::Harvested))) {
+      if (!(pair_state & static_cast<size_t>(ACStateDump::PairQueueState::Processed))) {
         ACStateDump::DumpPair(last_pair, &output);
         fmt::print(output, " {}\n", pair_state);
       }
@@ -117,7 +117,7 @@ void ProcessQueue(const Config& c) {
     }
     pair_state |= std::stoul(parsed[2]);
   }
-  if (!(pair_state & static_cast<size_t>(ACStateDump::PairQueueState::Harvested))) {
+  if (!(pair_state & static_cast<size_t>(ACStateDump::PairQueueState::Processed))) {
     ACStateDump::DumpPair(last_pair, &output);
     fmt::print(output, " {}\n", pair_state);
   }
