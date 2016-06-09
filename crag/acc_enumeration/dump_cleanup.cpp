@@ -256,7 +256,7 @@ void ProcessEdges(const Config& c) {
   std::vector<std::string> termini;
   std::string current_line;
 
-  std::regex terminus_regex(fmt::format(" {} [ha][01])", ACStateDump::pair_dump_re));
+  std::regex terminus_regex(fmt::format(" {} [ha][01]", ACStateDump::pair_dump_re));
 
   std::sregex_iterator current_terminus;
   auto termini_end = std::sregex_iterator();
