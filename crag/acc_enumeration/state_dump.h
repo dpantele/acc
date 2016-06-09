@@ -16,7 +16,6 @@ struct ACStateDump {
   BoostFilteringOStream ac_graph_vertex_harvest_;
   BoostFilteringOStream ac_graph_edges_;
 
-  uint64_t queue_index_ = 0u;
   BoostFilteringOStream pairs_queue_;
 
   BoostFilteringOStream ac_pair_class_;
@@ -38,9 +37,12 @@ struct ACStateDump {
   void NewMinimum(const ACClass&, const ACPair&);
   void DumpVertexHarvest(const ACPair& v, unsigned int harvest_limit, unsigned int complete_count);
 
-  ACPair last_origin_;
   void DumpHarvestEdge(const ACPair& from, const ACPair& to, bool from_is_flipped);
+  void DumpHarvestEdges(const ACPair& from, const std::vector<ACPair>& to, bool from_is_flipped);
   void DumpAutomorphEdge(const ACPair& from, const ACPair& to, bool inverse);
+
+  template<typename Container>
+  void DumpAutomorphEdges(const ACPair& from, const Container& to, bool inverse);
   void DumpPairClass(const ACPair& p, const ACClass& c);
 
   enum class PairQueueState : size_t {
@@ -89,5 +91,24 @@ struct ACStateDump {
     write_tasks_.Push(WriteTask{&to, std::move(data)});
   }
 };
+
+template <typename Container>
+void ACStateDump::DumpAutomorphEdges(const ACPair& from, const Container& to, bool inverse)  {
+  Write(ac_graph_edges_, [&](fmt::MemoryWriter& data) {
+    DumpPair(from, &data);
+    for (auto&& p : to) {
+      if (from == p) {
+        continue;
+      }
+      assert(inverse ? from < p : from > p);
+      data.write(" ");
+      DumpPair(p, &data);
+      data.write(" a{:d}", inverse);
+    }
+    data.write("\n");
+  });
+}
+
+
 
 #endif //ACC_ACC_CLASS_LOGGER_H

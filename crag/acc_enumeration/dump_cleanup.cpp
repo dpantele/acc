@@ -95,7 +95,7 @@ void ProcessQueue(const Config& c) {
   auto output = c.ofstream(c.pairs_queue_in());
 
   std::string next_line;
-  std::string queue_sump_line_regex_str = std::string("^(") + ACStateDump::pair_dump_re + ") (\\d) ([0-9a-f]+)$";
+  std::string queue_sump_line_regex_str = std::string("^(") + ACStateDump::pair_dump_re + ") (\\d)$";
   std::regex queue_sump_line(queue_sump_line_regex_str);
   std::smatch parsed;
   ACPair last_pair;

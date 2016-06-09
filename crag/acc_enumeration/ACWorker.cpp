@@ -137,8 +137,8 @@ struct ACWorker {
       }
       new_tuples.emplace_back(CWordTuple<2>{v, word});
       new_tuples.back() = ConjugationInverseFlipNormalForm(new_tuples.back());
-      state_dump.DumpHarvestEdge(uv_pair, new_tuples.back(), is_flipped);
     }
+    state_dump.DumpHarvestEdges(uv_pair, new_tuples, is_flipped);
 
     if (use_automorphisms) {
       for (auto& new_tuple : new_tuples) {
@@ -195,11 +195,7 @@ struct ACWorker {
           }
         }
 
-        for (const auto& image : minimal_orbit) {
-          if (min_tuple != image) {
-            state_dump.DumpAutomorphEdge(min_tuple, image, true);
-          }
-        }
+        state_dump.DumpAutomorphEdges(min_tuple, minimal_orbit, true);
 
         pairs_to_process->push_back(tuple);
       } else {
@@ -210,7 +206,7 @@ struct ACWorker {
 
   void ProcessedStats(const ACPair& p, boost::unique_lock<boost::shared_mutex> final_lock) {
     if (++state_->processed_count % 1000 == 0) {
-      std::clog << state_->processed_count << "/" << state_->data.queue->GetSize()
+      std::clog << state_->processed_count << "/" << state_->data.queue->GetTasksCount()
           << "/" << state_->data.ac_index->size() << "\n";
       for (auto&& c : state_->data.ac_classes) {
         if (c.IsPrimary()) {

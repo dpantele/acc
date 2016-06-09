@@ -105,28 +105,35 @@ void ACStateDump::DumpPair(const ACPair& p, fmt::MemoryWriter* out) {
 
 void ACStateDump::DumpHarvestEdge(const ACPair& from, const ACPair& to, bool from_is_flipped) {
   Write(ac_graph_edges_, [&](fmt::MemoryWriter& data) {
-    if (from != last_origin_) {
-      last_origin_ = from;
-      data.write("\n");
-      DumpPair(from, &data);
-    }
+    DumpPair(from, &data);
     data.write(" ");
     DumpPair(to, &data);
-    data.write(" h{:d}", from_is_flipped);
+    data.write(" h{:d}\n", from_is_flipped);
+  });
+}
+
+void ACStateDump::DumpHarvestEdges(const ACPair& from, const std::vector<ACPair>& to, bool from_is_flipped) {
+  Write(ac_graph_edges_, [&](fmt::MemoryWriter& data) {
+    DumpPair(from, &data);
+    for (auto&& p : to) {
+      if (from == p) {
+        continue;
+      }
+      data.write(" ");
+      DumpPair(p, &data);
+      data.write(" h{:d}", from_is_flipped);
+    }
+    data.write("\n");
   });
 }
 
 void ACStateDump::DumpAutomorphEdge(const ACPair& from, const ACPair& to, bool inverse) {
   assert(inverse ? from < to : from > to);
   Write(ac_graph_edges_, [&](fmt::MemoryWriter& data) {
-    if (from != last_origin_) {
-      last_origin_ = from;
-      data.write("\n");
-      DumpPair(from, &data);
-    }
+    DumpPair(from, &data);
     data.write(" ");
     DumpPair(to, &data);
-    data.write(" a{:d}", inverse);
+    data.write(" a{:d}\n", inverse);
   });
 }
 
@@ -161,7 +168,7 @@ ACPair ACStateDump::LoadPair(const std::string& pair_dump) {
 void ACStateDump::DumpPairQueueState(const ACPair& pair, PairQueueState state) {
   Write(pairs_queue_, [&](fmt::MemoryWriter& data) {
     DumpPair(pair, &data);
-    data.write(" {} {:x}\n", static_cast<int>(state), ++queue_index_);
+    data.write(" {}\n", static_cast<int>(state));
   });
 }
 

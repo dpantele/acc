@@ -87,12 +87,8 @@ class ACPairProcessQueue {
     input_queue_.Push(Value(pair, is_aut_normalized));
   }
 
-  bool IsEmpty() const {
-    return to_process.empty() && output_queue_.ApproximateCount() == 0 && input_queue_.ApproximateCount() == 0;
-  }
-
-  size_t GetSize() const {
-    return to_process.size() + output_queue_.ApproximateCount() + input_queue_.ApproximateCount();
+  size_t GetTasksCount() const {
+    return tasks_to_do_.load(std::memory_order_relaxed);
   }
 
   void Close() {
@@ -112,7 +108,7 @@ class ACPairProcessQueue {
       throw std::runtime_error("TaskDone() is called without an active task");
     }
     if (result == 1) {
-      if (!IsEmpty()) {
+      if (output_queue_.ApproximateCount() != 0) {
         throw std::runtime_error("TaskDone() was not called after some pair was processed");
       }
 
