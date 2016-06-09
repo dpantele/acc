@@ -55,47 +55,62 @@ void SimpleMPMCQueueTest(size_t queue_size, unsigned push_count, float producers
   }
 
   auto Producer = [&] (size_t block) {
+    auto start = std::chrono::high_resolution_clock::now();
     for (auto i = block; i < push_count; i += producers_count) {
       q.Push(i);
     }
+    return std::chrono::high_resolution_clock::now() - start;
   };
 
   auto Consumer = [&] (std::vector<size_t>* pushed_elems) {
     size_t e;
+    auto start = std::chrono::high_resolution_clock::now();
     while (q.Pop(e)) {
       pushed_elems->push_back(e);
     }
+    return std::chrono::high_resolution_clock::now() - start;
   };
 
-  std::vector<std::future<void>> producers;
+  std::vector<std::future<std::chrono::high_resolution_clock::duration>> producers;
   for (auto i = 0u; i < producers_count; ++i) {
     producers.push_back(std::async(std::launch::async, Producer, i));
   }
 
-  std::vector<std::pair<std::future<void>, std::vector<size_t>>> consumers;
+  std::vector<std::pair<std::future<std::chrono::high_resolution_clock::duration>, std::vector<size_t>>> consumers;
   consumers.reserve(consumers_count);
   for (auto i = 0u; i < consumers_count; ++i) {
     consumers.emplace_back();
     consumers.back().first = std::async(std::launch::async, Consumer, &consumers.back().second);
   }
 
+  bool producer_timeout = false;
+
   for (auto&& p : producers) {
-    if (p.wait_for(std::chrono::milliseconds(100)) != std::future_status::ready) {
-      throw std::runtime_error("Producer timeout");
+    if (p.get() > std::chrono::milliseconds(100)) {
+      producer_timeout = true;
     }
-    p.get();
   }
 
   q.Close();
 
+  bool consumer_timeout = false;
+
   std::vector<size_t> pushed_elems;
   for (auto&& c : consumers) {
-    if (c.first.wait_for(std::chrono::milliseconds(100)) != std::future_status::ready) {
-      throw std::runtime_error("Consumer timeout");
+    if (c.first.get() > std::chrono::milliseconds(100)) {
+      consumer_timeout = true;
     }
-    c.first.get();
     pushed_elems.insert(pushed_elems.end(), c.second.begin(), c.second.end());
   }
+
+  if (producer_timeout) {
+    throw std::runtime_error("Producer timeout");
+  }
+
+  if (consumer_timeout) {
+    throw std::runtime_error("Producer timeout");
+  }
+
 
   std::sort(pushed_elems.begin(), pushed_elems.end());
 
@@ -113,7 +128,7 @@ void SimpleMPMCQueueTest(size_t queue_size, unsigned push_count, float producers
 }
 
 template<typename F, typename ... Args>
-void Try(const char* name, F&& f, Args&&... args) {
+bool Try(const char* name, F&& f, Args&&... args) {
   try {
     std::cout << name << "... " << std::flush;
 
@@ -139,37 +154,44 @@ void Try(const char* name, F&& f, Args&&... args) {
     std::cout << "Ok " << i << " times, min=" << std::chrono::duration_cast<std::chrono::microseconds>(best_result).count() << "us" << std::endl;
   } catch(std::runtime_error& e) {
     std::cout << "Fail: " << e.what() << std::endl;
+    return false;
   }
+  return true;
 }
 
 int main() {
-  Try("SimpleSPSCQueueTest(  64,     50)", SimpleSPSCQueueTest,      64,     50);
-//  Try("SimpleSPSCQueueTest(  64,    100)", SimpleSPSCQueueTest,      64,    100);
-//  Try("SimpleSPSCQueueTest(  64,  10000)", SimpleSPSCQueueTest,      64,  10000);
-//  Try("SimpleSPSCQueueTest(8192, 100000)", SimpleSPSCQueueTest, 1 << 13, 100000);
-//  Try("SimpleMPMCQueueTest(  64,     50, 0.5, 0.5)", SimpleMPMCQueueTest,      64,     50, 0.5, 0.5);
-//  Try("SimpleMPMCQueueTest(  64,    100, 0.5, 0.5)", SimpleMPMCQueueTest,      64,    100, 0.5, 0.5);
-//  Try("SimpleMPMCQueueTest(  64,  10000, 0.5, 0.5)", SimpleMPMCQueueTest,      64,  10000, 0.5, 0.5);
-//  Try("SimpleMPMCQueueTest(   2,  10000, 0.5, 0.5)", SimpleMPMCQueueTest,       2,  10000, 0.5, 0.5);
-//  Try("SimpleMPMCQueueTest(8192, 100000, 0.5, 0,5)", SimpleMPMCQueueTest, 1 << 13, 100000, 0.5, 0.5);
-//  Try("SimpleMPMCQueueTest(  64,     50,   1,   1)", SimpleMPMCQueueTest,      64,     50,   1,   1);
-//  Try("SimpleMPMCQueueTest(  64,    100,   1,   1)", SimpleMPMCQueueTest,      64,    100,   1,   1);
-//  Try("SimpleMPMCQueueTest(  64,  10000,   1,   1)", SimpleMPMCQueueTest,      64,  10000,   1,   1);
-//  Try("SimpleMPMCQueueTest(   2,  10000,   1,   1)", SimpleMPMCQueueTest,       2,  10000,   1,   1);
-//  Try("SimpleMPMCQueueTest(8192, 100000,   1,   1)", SimpleMPMCQueueTest, 1 << 13, 100000,   1,   1);
-//  Try("SimpleMPMCQueueTest(  64,     50,   3,   3)", SimpleMPMCQueueTest,      64,     50,   3,   3);
-//  Try("SimpleMPMCQueueTest(  64,    100,   3,   3)", SimpleMPMCQueueTest,      64,    100,   3,   3);
-//  Try("SimpleMPMCQueueTest(  64,  10000,   3,   3)", SimpleMPMCQueueTest,      64,  10000,   3,   3);
-//  Try("SimpleMPMCQueueTest(   2,  10000,   3,   3)", SimpleMPMCQueueTest,       2,  10000,   3,   3);
-//  Try("SimpleMPMCQueueTest(8192, 100000,   3,   3)", SimpleMPMCQueueTest, 1 << 13, 100000,   3,   3);
-//  Try("SimpleMPMCQueueTest(  64,     50, 0.5,   3)", SimpleMPMCQueueTest,      64,     50, 0.5,   3);
-//  Try("SimpleMPMCQueueTest(  64,    100, 0.5,   3)", SimpleMPMCQueueTest,      64,    100, 0.5,   3);
-//  Try("SimpleMPMCQueueTest(  64,  10000, 0.5,   3)", SimpleMPMCQueueTest,      64,  10000, 0.5,   3);
-//  Try("SimpleMPMCQueueTest(   2,  10000, 0.5,   3)", SimpleMPMCQueueTest,       2,  10000, 0.5,   3);
-//  Try("SimpleMPMCQueueTest(8192, 100000, 0.5,   3)", SimpleMPMCQueueTest, 1 << 13, 100000, 0.5,   3);
-//  Try("SimpleMPMCQueueTest(  64,     50,   3, 0.5)", SimpleMPMCQueueTest,      64,     50,   3, 0.5);
-//  Try("SimpleMPMCQueueTest(  64,    100,   3, 0.5)", SimpleMPMCQueueTest,      64,    100,   3, 0.5);
-//  Try("SimpleMPMCQueueTest(  64,  10000,   3, 0.5)", SimpleMPMCQueueTest,      64,  10000,   3, 0.5);
-  Try("SimpleMPMCQueueTest(   2,  10000,   3, 0.5)", SimpleMPMCQueueTest,       2,  10000,   3, 0.5);
-//  Try("SimpleMPMCQueueTest(8192, 100000,   3, 0.5)", SimpleMPMCQueueTest, 1 << 13, 100000,   3, 0.5);
+  bool success = true;
+  success &= Try("SimpleSPSCQueueTest(  64,     50)", SimpleSPSCQueueTest,      64,     50);
+  success &= Try("SimpleSPSCQueueTest(  64,    100)", SimpleSPSCQueueTest,      64,    100);
+  success &= Try("SimpleSPSCQueueTest(  64,  10000)", SimpleSPSCQueueTest,      64,  10000);
+  success &= Try("SimpleSPSCQueueTest(8192, 100000)", SimpleSPSCQueueTest, 1 << 13, 100000);
+  success &= Try("SimpleMPMCQueueTest(  64,     50, 0.5, 0.5)", SimpleMPMCQueueTest,      64,     50, 0.5, 0.5);
+  success &= Try("SimpleMPMCQueueTest(  64,    100, 0.5, 0.5)", SimpleMPMCQueueTest,      64,    100, 0.5, 0.5);
+  success &= Try("SimpleMPMCQueueTest(  64,  10000, 0.5, 0.5)", SimpleMPMCQueueTest,      64,  10000, 0.5, 0.5);
+  success &= Try("SimpleMPMCQueueTest(   2,  10000, 0.5, 0.5)", SimpleMPMCQueueTest,       2,  10000, 0.5, 0.5);
+  success &= Try("SimpleMPMCQueueTest(8192, 100000, 0.5, 0,5)", SimpleMPMCQueueTest, 1 << 13, 100000, 0.5, 0.5);
+  success &= Try("SimpleMPMCQueueTest(  64,     50,   1,   1)", SimpleMPMCQueueTest,      64,     50,   1,   1);
+  success &= Try("SimpleMPMCQueueTest(  64,    100,   1,   1)", SimpleMPMCQueueTest,      64,    100,   1,   1);
+  success &= Try("SimpleMPMCQueueTest(  64,  10000,   1,   1)", SimpleMPMCQueueTest,      64,  10000,   1,   1);
+  success &= Try("SimpleMPMCQueueTest(   2,  10000,   1,   1)", SimpleMPMCQueueTest,       2,  10000,   1,   1);
+  success &= Try("SimpleMPMCQueueTest(8192, 100000,   1,   1)", SimpleMPMCQueueTest, 1 << 13, 100000,   1,   1);
+  success &= Try("SimpleMPMCQueueTest(  64,     50,   3,   3)", SimpleMPMCQueueTest,      64,     50,   3,   3);
+  success &= Try("SimpleMPMCQueueTest(  64,    100,   3,   3)", SimpleMPMCQueueTest,      64,    100,   3,   3);
+  success &= Try("SimpleMPMCQueueTest(  64,  10000,   3,   3)", SimpleMPMCQueueTest,      64,  10000,   3,   3);
+  success &= Try("SimpleMPMCQueueTest(   2,  10000,   3,   3)", SimpleMPMCQueueTest,       2,  10000,   3,   3);
+  success &= Try("SimpleMPMCQueueTest(8192, 100000,   3,   3)", SimpleMPMCQueueTest, 1 << 13, 100000,   3,   3);
+  success &= Try("SimpleMPMCQueueTest(  64,     50, 0.5,   3)", SimpleMPMCQueueTest,      64,     50, 0.5,   3);
+  success &= Try("SimpleMPMCQueueTest(  64,    100, 0.5,   3)", SimpleMPMCQueueTest,      64,    100, 0.5,   3);
+  success &= Try("SimpleMPMCQueueTest(  64,  10000, 0.5,   3)", SimpleMPMCQueueTest,      64,  10000, 0.5,   3);
+  success &= Try("SimpleMPMCQueueTest(   2,  10000, 0.5,   3)", SimpleMPMCQueueTest,       2,  10000, 0.5,   3);
+  success &= Try("SimpleMPMCQueueTest(8192, 100000, 0.5,   3)", SimpleMPMCQueueTest, 1 << 13, 100000, 0.5,   3);
+  success &= Try("SimpleMPMCQueueTest(  64,     50,   3, 0.5)", SimpleMPMCQueueTest,      64,     50,   3, 0.5);
+  success &= Try("SimpleMPMCQueueTest(  64,    100,   3, 0.5)", SimpleMPMCQueueTest,      64,    100,   3, 0.5);
+  success &= Try("SimpleMPMCQueueTest(  64,  10000,   3, 0.5)", SimpleMPMCQueueTest,      64,  10000,   3, 0.5);
+  success &= Try("SimpleMPMCQueueTest(   2,  10000,   3, 0.5)", SimpleMPMCQueueTest,       2,  10000,   3, 0.5);
+  success &= Try("SimpleMPMCQueueTest(8192, 100000,   3, 0.5)", SimpleMPMCQueueTest, 1 << 13, 100000,   3, 0.5);
+
+  if (!success) {
+    return 1;
+  }
 }
