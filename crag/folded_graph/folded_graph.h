@@ -27,23 +27,10 @@ class FoldedGraph
 
   struct EdgeData
   {
-//   public:
-//    friend class FoldedGraph::Vertex;
-
     explicit operator bool() const {
       return terminus_ != nullptr;
     }
 
-//    const Vertex& terminus() const {
-//      assert(terminus_);
-//      return *terminus_;
-//    }
-//
-//    Weight weight() const {
-//      return weight_;
-//    }
-//
-//   private:
     Vertex* terminus_ = nullptr;
     Weight weight_ = 0;
   };
@@ -246,7 +233,7 @@ class FoldedGraph
 
   FoldedGraph()
       : vertices_(1)
-        , root_(&vertices_.front()) {
+      , root_(&vertices_.front()) {
   }
 
   Vertex& root() {
