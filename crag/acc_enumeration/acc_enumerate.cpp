@@ -26,6 +26,9 @@
 #include "Terminator.h"
 #include "ACWorker.h"
 
+#include <sys/time.h>
+#include <sys/resource.h>
+
 using namespace crag;
 
 //! The input file should cotain a pair of {x,y} word on each line
@@ -51,7 +54,73 @@ std::vector<ACPair> LoadInput(const Config& c) {
   return result;
 }
 
+template<typename Rep, typename Unit>
+std::string ToHumanString(std::chrono::duration<Rep, Unit> time) {
+  using namespace std::chrono;
+
+  typedef duration<int, std::ratio<3600 * 24>> days;
+  typedef duration<int, std::ratio<3600 * 24 * 7>> weeks;
+
+  if (time >= weeks(1)) {
+    std::string result;
+    auto weeks_count = duration_cast<weeks>(time);
+    time -= weeks_count;
+    auto days_count = duration_cast<days>(time);
+    time -= days_count;
+    auto hours_count = duration_cast<hours>(time);
+
+    result += fmt::format("{}W", weeks_count.count());
+    if (days_count.count() != 0) {
+      result += fmt::format(" {}D", days_count.count());
+    }
+    if (hours_count.count() != 0) {
+      result += fmt::format(" {}H", hours_count.count());
+    }
+    return result;
+  }
+  if (time >= days(1)) {
+    auto days_count = duration_cast<days>(time);
+    time -= days_count;
+    auto hours_count = std::round(duration<double, hours::period>(time).count() * 10) / 10;
+    if (hours_count < 0.3) {
+      return fmt::format("{}D", days_count.count());
+    } else {
+      return fmt::format("{}D {:.1}H", days_count.count(), hours_count);
+    }
+  }
+  auto hours_count = duration_cast<hours>(time);
+  time -= hours_count;
+  auto minutes_count = duration_cast<minutes>(time);
+  time -= minutes_count;
+  auto seconds_count = duration_cast<seconds>(time);
+
+  if (hours_count.count() != 0) {
+    return fmt::format("{}h:{}m:{}s", hours_count.count(), minutes_count.count(), seconds_count.count());
+  }
+  if (minutes_count.count() != 0) {
+    return fmt::format("{}m:{}s", minutes_count.count(), seconds_count.count());
+  }
+
+  time -= seconds_count;
+  auto milliseconds_count = duration_cast<milliseconds>(time);
+  if (seconds_count.count() != 0) {
+    return fmt::format("{}.{}s", seconds_count.count(), milliseconds_count.count());
+  }
+
+  if (milliseconds_count.count() >= 10) {
+    return fmt::format("{}ms", milliseconds_count.count());
+  }
+
+  auto nanoseconds_count = duration_cast<nanoseconds>(time);
+  return fmt::format("{}us", nanoseconds_count.count());
+};
+
+auto TimevalToDuration(timeval t) {
+  return std::chrono::seconds(t.tv_sec) + std::chrono::microseconds(t.tv_usec);
+}
+
 void EnumerateAC(path config_path) {
+  auto start_time = std::chrono::system_clock::now();
   Terminator t;
 
   Config config;
@@ -157,6 +226,20 @@ void EnumerateAC(path config_path) {
   Process(data);
   to_process.Terminate();
   std::clog << "Enumeration stopped, wait till dump is synchronized" << std::endl;
+
+  //getting some stats
+
+  struct rusage usage;
+
+  if (getrusage(RUSAGE_SELF, &usage) == -1) {
+    throw fmt::SystemError(errno, "Can't query resorse usage");
+  }
+
+  auto final_stats = config.ofstream(config.run_stats(), std::ios::app);
+  fmt::print(final_stats, "Spent {}\n", ToHumanString(std::chrono::system_clock::now() - start_time));
+  fmt::print(final_stats, "{} CPU time in user mode\n", ToHumanString(TimevalToDuration(usage.ru_utime)));
+  fmt::print(final_stats, "{} CPU time in kernel mode\n", ToHumanString(TimevalToDuration(usage.ru_stime)));
+  fmt::print(final_stats, "Used {} max RAM\n", ToHumanReadableByteCount(static_cast<size_t>(usage.ru_maxrss) * 1024));
 }
 
 int main(int argc, char* argv[]) {
@@ -165,6 +248,8 @@ int main(int argc, char* argv[]) {
   }
 
   EnumerateAC(argv[1]);
+
+
 
   std::clog << "Dump is syncronized, it is safe to interrupt process now" << std::endl;
 

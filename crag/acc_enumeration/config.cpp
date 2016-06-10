@@ -76,7 +76,7 @@ BoostFilteringIStream Config::ifstream(const path& p, std::ios_base::openmode mo
     result.push(io::gzip_decompressor());
     result.push(io::file_source(p.c_str(), mode | std::ios_base::binary));
   } else {
-    result.push(io::file_source(p.c_str()));
+    result.push(io::file_source(p.c_str(), mode));
   }
   assert(result.size() >= 1);
   if (!result.component<io::file_source>((int) (result.size() - 1))->is_open()) {
@@ -91,7 +91,7 @@ BoostFilteringOStream Config::ofstream(const path& p, std::ios_base::openmode mo
     result.push(io::gzip_compressor(9));
     result.push(io::file_sink(p.c_str(), mode | std::ios_base::binary));
   } else {
-    result.push(io::file_sink(p.c_str()));
+    result.push(io::file_sink(p.c_str(), mode));
   }
   assert(result.size() >= 1);
   if (!result.component<io::file_sink>((int) (result.size() - 1))->is_open()) {

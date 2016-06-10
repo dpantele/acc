@@ -9,7 +9,7 @@
 
 namespace io = boost::iostreams;
 
-void InitOstream(const Config& c, std::initializer_list<std::pair<path, BoostFilteringOStream*>> to_init) {
+static void InitOstream(const Config& c, std::initializer_list<std::pair<path, BoostFilteringOStream*>> to_init) {
   for (auto&& stream : to_init) {
     if (fs::exists(stream.first)) {
       throw std::runtime_error(".dump files were not post-processed or deleted after a run");

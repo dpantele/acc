@@ -5,6 +5,8 @@
 #include "ACWorker.h"
 
 #include "acc_class.h"
+#include "ACWorkerStats.h"
+#include "stopwatch.h"
 
 #include <boost/thread/locks.hpp>
 #include <boost/thread/shared_mutex.hpp>
@@ -12,12 +14,14 @@
 #include <crag/folded_graph/complete.h>
 #include <crag/folded_graph/folded_graph.h>
 #include <crag/folded_graph/harvest.h>
+#include <regex>
 
 using namespace crag;
 
 struct WorkersSharedState {
   ACTasksData data;
   ACClass* trivial_class;
+  ACWorkerStats* worker_stats;
 
   //data.ac_index (and uv_classes we get from it), index_size and processed count may be changed only under reader lock
   //data.ac_index, uv_classes may be viewed only after getting a reading lock
@@ -97,9 +101,14 @@ struct ACWorker {
     return false;
   }
 
+  struct ProcessStepData {
+    std::vector<ACClass*> classes_to_merge;
+    std::vector<ACPair> pairs_to_add;
+    std::vector<ACPair> pairs_to_process;
+  };
+
   void ACMMove(const ACPair& uv_pair, bool is_flipped, const PairInfo& pair_info,
-      std::vector<ACClass*>* classes_to_merge,
-      std::vector<ACPair>* pairs_to_add, std::vector<ACPair>* pairs_to_process
+      ProcessStepData* step_data, MoveStats* stats
   ) {
     assert(ConjugationInverseFlipNormalForm(uv_pair) == uv_pair);
 
@@ -110,6 +119,7 @@ struct ACWorker {
     bool use_automorphisms = pair_info.use_automorphisms;
 
     //to make a single ACM-move, first we need to build a FoldedGraph
+    stats->GraphConstructClick();
     FoldedGraph g;
 
     //start from a cycle u of weight 1
@@ -120,9 +130,24 @@ struct ACWorker {
     while (complete_count-- > 0) {
       CompleteWith(v, &g);
     }
+    stats->GraphConstructClick();
+
+    stats->SetGraphSize(g.size());
+    stats->SetGraphModulus(static_cast<size_t>(std::abs(g.modulus().modulus())));
+
+    FoldedGraph::Weight max_weight = 0;
+    for (auto&& vx : g) {
+      for (auto&& e : vx) {
+        max_weight = std::max(max_weight, std::abs(e.weight()));
+      }
+    }
+
+    stats->SetGraphMaxWeight(static_cast<size_t>(max_weight));
 
     //harvest all cycles of weight \pm
+    stats->HarvestClick();
     auto harvested_words = Harvest(pair_info.harvest_limit, 1, &g);
+    stats->HarvestClick();
     std::vector<CWordTuple<2>> new_tuples;
     new_tuples.reserve(harvested_words.size());
 
@@ -136,14 +161,23 @@ struct ACWorker {
         continue;
       }
       new_tuples.emplace_back(CWordTuple<2>{v, word});
+      stats->ConjNormalizeClick();
       new_tuples.back() = ConjugationInverseFlipNormalForm(new_tuples.back());
+      stats->ConjNormalizeClick();
     }
+
     state_dump.DumpHarvestEdges(uv_pair, new_tuples, is_flipped);
+
+    stats->SetHarvestedPairs(harvested_words.size());
 
     if (use_automorphisms) {
       for (auto& new_tuple : new_tuples) {
+        stats->WhiteheadReduceClick();
         auto normalized_tuple = WhitheadMinLengthTuple(new_tuple);
+        stats->WhiteheadReduceClick();
+        stats->ConjNormalizeClick();
         normalized_tuple = ConjugationInverseFlipNormalForm(normalized_tuple);
+        stats->ConjNormalizeClick();
         if (normalized_tuple != new_tuple) {
           state_dump.DumpAutomorphEdge(new_tuple, normalized_tuple, false);
           new_tuple = normalized_tuple;
@@ -157,6 +191,8 @@ struct ACWorker {
     auto new_tuple = new_tuples.begin();
     auto new_tuples_keep = new_tuple;
 
+    stats->SetUniquePairs(static_cast<size_t>(tuples_end - new_tuple));
+
     //! Actual merging requires write lock, we combine all writes under a single lock
     {
       auto read_lock = ReadingLock();
@@ -165,7 +201,7 @@ struct ACWorker {
         auto exists = ac_index.find(*new_tuple);
         if (exists != ac_index.end()) {
           //we merge two ac classes
-          classes_to_merge->emplace_back(exists->second);
+          step_data->classes_to_merge.emplace_back(exists->second);
         } else {
           //we move this pair to the ones which will be kept
           *new_tuples_keep = *new_tuple;
@@ -179,16 +215,20 @@ struct ACWorker {
 
     for (auto&& tuple : new_tuples) {
       if (use_automorphisms) {
+        stats->WhiteheadExtendClick();
         std::set<CWordTuple<2>> minimal_orbit = {tuple};
         CompleteWithShortestAutoImages(&minimal_orbit);
+        stats->WhiteheadExtendClick();
 
         auto min_tuple = tuple;
 
         for (auto image : minimal_orbit) {
+          stats->ConjNormalizeClick();
           image = ConjugationInverseFlipNormalForm(image);
+          stats->ConjNormalizeClick();
 
           //all pairs in the min orbit are added to index so that later we could check fast a non-auto-normalized pair
-          pairs_to_add->push_back(image);
+          step_data->pairs_to_add.push_back(image);
 
           if (image < min_tuple) {
             min_tuple = image;
@@ -196,12 +236,14 @@ struct ACWorker {
         }
 
         state_dump.DumpAutomorphEdges(min_tuple, minimal_orbit, true);
-
-        pairs_to_process->push_back(tuple);
+        step_data->pairs_to_process.push_back(min_tuple);
       } else {
-        pairs_to_process->push_back(tuple);
+        step_data->pairs_to_process.push_back(tuple);
       }
     }
+
+    stats->SetAutOrbitSize(step_data->pairs_to_process.empty() ? 0 : step_data->pairs_to_add.size() / step_data->pairs_to_process.size());
+    stats->SetAddedPairs(step_data->pairs_to_process.size());
   };
 
   void ProcessedStats(const ACPair& p, boost::unique_lock<boost::shared_mutex> final_lock) {
@@ -214,6 +256,58 @@ struct ACWorker {
           std::clog << "\n";
         }
       }
+    }
+  }
+
+  void ReportACMoveStats(const ACPair& p, bool swapped, const PairInfo& info, const MoveStats& stats) {
+    ClickTimer::Duration all_time{};
+
+    auto GetMs = [](auto t) {
+      return std::chrono::duration_cast<std::chrono::microseconds>(t).count();
+    };
+
+    auto GetPct = [&](ClickTimer::Duration d) {
+      return (d * 100 / stats.total_time.Total());
+    };
+
+    state_->worker_stats->Write(&state_->worker_stats->move_stats_out_,
+        state_->data.config.stats_to_stout_ == Config::StatsToStdout::kFull,  [&] (fmt::MemoryWriter& out) {
+      out.write("{}", state_->data.queue->GetTasksCount());
+
+
+      out.write(", {:.4f}", std::chrono::duration<double>(stats.total_time.Total()).count());
+      for(auto& f : stats.timers) {
+        all_time += f.Total();
+        out.write(", {}@{}", GetMs(f.Total()), GetMs(f.Average()));
+      }
+
+      out.write(", {}", GetMs(stats.total_time.Total() - all_time));
+
+      for(auto& f : stats.timers) {
+        out.write(", {}", GetPct(f.Total()));
+      }
+
+      for (auto& c : stats.num_stats) {
+        out.write(", {}", c);
+      }
+
+      out.write(", {:d}, {:d}, {:d}, {:d}, {:d}, ", swapped, info.use_automorphisms, info.is_trivial, info.harvest_limit,
+          info.complete_count);
+      ACStateDump::DumpPair(p, &out);
+      out.write("\n");
+    });
+
+    if (Config::StatsToStdout::kShort == state_->data.config.stats_to_stout_) {
+      state_->worker_stats->Write(nullptr,
+          true, [&] (fmt::MemoryWriter& out) {
+            out.write("{:7d}, {:7.4f}, {:2}, {:2},{:5}, {:5}, {:5}\n",
+                state_->data.queue->GetTasksCount(),
+                std::chrono::duration<double>(stats.total_time.Total()).count(),
+                p[0].size(), p[1].size(), info.use_automorphisms,
+                stats.GetHarvestedPairs(),
+                stats.GetAddedPairs()
+            );
+          });
     }
   }
 
@@ -234,12 +328,21 @@ struct ACWorker {
       return ProcessedStats(pair, WritingLock());
     }
 
-    std::vector<ACClass*> classes_to_merge;
-    std::vector<ACPair> pairs_to_add, pairs_to_process;
 
     // Harvest the pair and its flip
-    ACMMove(pair, false, pair_info, &classes_to_merge, &pairs_to_add, &pairs_to_process);
-    ACMMove(pair, true, pair_info, &classes_to_merge, &pairs_to_add, &pairs_to_process);
+    ProcessStepData step_data;
+
+    MoveStats first_move;
+    first_move.TotalClick();
+    ACMMove(pair, false, pair_info, &step_data, &first_move);
+    first_move.TotalClick();
+    ReportACMoveStats(pair, false, pair_info, first_move);
+
+    MoveStats second_move;
+    second_move.TotalClick();
+    ACMMove(pair, true, pair_info, &step_data, &second_move);
+    second_move.TotalClick();
+    ReportACMoveStats(pair, true, pair_info, second_move);
 
     state_->data.dump->DumpVertexHarvest(pair, pair_info.harvest_limit, pair_info.complete_count);
 
@@ -247,12 +350,12 @@ struct ACWorker {
     {
       auto final_lock = WritingLock();
 
-      for (auto&& other_class : classes_to_merge) {
+      for (auto&& other_class : step_data.classes_to_merge) {
         pair_info.p_class->Merge(other_class);
       }
 
       auto& ac_index = *state_->data.ac_index;
-      for (auto&& to_add : (pair_info.use_automorphisms ? pairs_to_add : pairs_to_process)) {
+      for (auto&& to_add : (pair_info.use_automorphisms ? step_data.pairs_to_add : step_data.pairs_to_process)) {
         pair_info.p_class->AddPair(to_add);
         ac_index.emplace(to_add, pair_info.p_class);
         ++state_->index_size;
@@ -264,7 +367,7 @@ struct ACWorker {
     //schedule obtained words
     {
       auto& to_process = state_->data.queue;
-      for (auto&& pair_to_process : pairs_to_process) {
+      for (auto&& pair_to_process : step_data.pairs_to_process) {
         to_process->Push(pair_to_process, pair_info.use_automorphisms);
       }
     }
@@ -272,7 +375,19 @@ struct ACWorker {
 };
 
 void Process(const ACTasksData& data) {
-  WorkersSharedState state{data, data.ac_index->at(ACPair{CWord("x"), CWord("y")})};
+  ACWorkerStats worker_stats(data.config);
+
+  worker_stats.Write(&worker_stats.move_stats_out_,
+      data.config.stats_to_stout_ == Config::StatsToStdout::kFull, [](fmt::MemoryWriter& out) {
+    std::regex header("([^,]+)(,?)");
+    std::string timers_names_pct = std::regex_replace(MoveStats::timers_order, header, "$1_pct$2");
+
+    out.write("tasks_left, move_total_time, {}, rest_time, {}, {}, is_swapped, use_automorphisms, is_trivial, "
+                  "harvest_limit, complete_count, pair\n", MoveStats::timers_order, timers_names_pct,
+        MoveStats::stats_order);
+  });
+
+  WorkersSharedState state{data, data.ac_index->at(ACPair{CWord("x"), CWord("y")}), &worker_stats};
 
   std::deque<ACWorker> workers;
   while(workers.size() < data.config.workers_count_) {
@@ -282,5 +397,8 @@ void Process(const ACTasksData& data) {
   while(!workers.empty()) {
     workers.pop_back();
   }
+
+  auto final_stats = data.config.ofstream(data.config.run_stats(), std::ios::app);
+  fmt::print(final_stats, "Processed {} pairs\n", state.processed_count);
 }
 

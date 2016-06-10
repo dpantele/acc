@@ -46,7 +46,9 @@ target_link_libraries(acc_enumerate_utils
 add_executable(crag.acc_enumeration.acc_enumerate
     ACPairProcessQueue.h
     acc_enumerate.cpp
-    ACWorker.cpp ACWorker.h)
+    ACWorker.cpp ACWorker.h
+    ACWorkerStats.cpp ACWorkerStats.h
+    stopwatch.h stopwatch.cpp)
 
 target_link_libraries(crag.acc_enumeration.acc_enumerate PRIVATE
     Boost::thread

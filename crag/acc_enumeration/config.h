@@ -6,6 +6,7 @@
 #define ACC_CONFIG_H
 
 #include <algorithm>
+#include <iomanip>
 #include <memory>
 
 #include <boost/filesystem.hpp>
@@ -49,6 +50,9 @@ struct Config {
 
   //! Location of various files keeping the state of computation
   path dump_dir_ = "./dumps";
+
+  //! Statistics anout the program execution
+  path stats_dir_ = "./stats";
 
   //! Input file with a list of pairs to process
   path input_ = "./initial_presentations.txt";
@@ -119,6 +123,29 @@ struct Config {
     return dump_dir() / path("pairs_classes.dump.txt.gz");
   }
 
+  path stats_dir() const {
+    if (stats_dir_.is_absolute()) {
+      return stats_dir_;
+    }
+    return base_dir_ / stats_dir_;
+  }
+
+  enum class StatsToStdout {
+    kNo,
+    kShort,
+    kFull
+  } stats_to_stout_ = StatsToStdout::kNo;
+
+  char stats_startime[20];
+
+  path ac_move_stats() const {
+    return stats_dir() / path(fmt::format("{}.ac_move_stats.txt.gz", stats_startime));
+  }
+
+  path run_stats() const {
+    return stats_dir() / path(fmt::format("{}.run.txt", stats_startime));
+  }
+
   // simple wrappers which create the appropriate chain
   BoostFilteringIStream ifstream(const path& p, std::ios_base::openmode mode) const;
   BoostFilteringIStream ifstream(const path& p) const {
@@ -140,7 +167,10 @@ struct Config {
 
   Config()
       : base_dir_(boost::filesystem::current_path())
-  { }
+  {
+    std::time_t now = std::time(nullptr);
+    std::strftime(stats_startime, sizeof(stats_startime), "%Y-%m-%d.%H-%M-%S", std::localtime(&now));
+  }
 
   std::string ConfigAsString() const {
     json dump;
@@ -149,6 +179,19 @@ struct Config {
     dump["dump_memory_limit"] = ToHumanReadableByteCount(memory_limit_);
     dump["dump_queue_limit"] = std::to_string(dump_queue_limit_);
     dump["input"] = input_.generic_string();
+    dump["stats_dir"] = stats_dir_.generic_string();
+
+    switch(stats_to_stout_) {
+      case StatsToStdout::kNo:
+        dump["stats_to_stdout"] = "no";
+        break;
+      case StatsToStdout::kShort:
+        dump["stats_to_stdout"] = "short";
+        break;
+      case StatsToStdout::kFull:
+        dump["stats_to_stdout"] = "full";
+        break;
+    }
 
     if (workers_count_fraction_ == kFractionNotUsed) {
       dump["workers_count"] = std::to_string(workers_count_);
@@ -164,8 +207,20 @@ struct Config {
     ConfigFromJson(config, "base_dir", &base_dir_);
     ConfigFromJson(config, "input", &input_);
     ConfigFromJson(config, "dump_dir", &dump_dir_);
+    ConfigFromJson(config, "stats_dir", &stats_dir_);
 
     std::string temp;
+    ConfigFromJson(config, "stats_to_stdout", &temp);
+    if (!temp.empty()) {
+      if (temp == "short") {
+        stats_to_stout_ = StatsToStdout::kShort;
+      }
+      if (temp == "full") {
+        stats_to_stout_ = StatsToStdout::kFull;
+      }
+      temp.clear();
+    }
+
     ConfigFromJson(config, "dump_memory_limit", &temp);
     if (!temp.empty()) {
       memory_limit_ = FromHumanReadableByteCount(temp);
