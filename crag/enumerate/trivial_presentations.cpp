@@ -120,12 +120,7 @@ CWordTuple<2> AutoNormalForm(const CWord& u, const CWord& v) {
   auto tuple = CWordTuple<2>{u, v};
   auto min = tuple;
   for (auto&& image : ShortestAutomorphicImages(tuple)) {
-    auto image_min = ConjugationInverseNormalForm(image);
-    if (Length(image_min) < Length(min) || image_min < min) {
-      min = image_min;
-    }
-    image_min.Reverse();
-
+    auto image_min = ConjugationInverseFlipNormalForm(image);
     if (image_min < min) {
       min = image_min;
     }
@@ -282,7 +277,7 @@ index: 8
 
  */
 
-void findBestSubgroup(const CWord& u, const CWord& v) {
+size_t findBestSubgroup(const CWord& u, const CWord& v, std::vector<CWord>* resulting_shortest_rels=nullptr) {
   auto TotaLength = [](const std::vector<CWord>& words) {
     return std::accumulate(words.begin(), words.end(), 0u, [](unsigned int l, const CWord& w) { return l + w.size(); });
   };
@@ -313,10 +308,20 @@ void findBestSubgroup(const CWord& u, const CWord& v) {
     }
   }
 
-  for (auto&& w : shortest_rels) {
-    std::cout << w << "\n";
+  if (index != 0u)  {
+    if (resulting_shortest_rels) {
+      *resulting_shortest_rels = std::move(shortest_rels);
+    }
+    else {
+      for (auto&& w : shortest_rels) {
+        std::cout << w << "\n";
+      }
+
+      std::cout << "index: " << index << "\n";
+    }
   }
-  std::cout << "index: " << index << "\n";
+
+  return index;
 }
 
 /*
@@ -338,75 +343,110 @@ void findBestSubgroup(const CWord& u, const CWord& v) {
  * index: 8
  */
 
-int main(int argc, char* argv[]) {
-  kCompleteCount = std::stoi(argv[1]);
-  CWord a(argv[2]);
-  CWord b(argv[3]);
+/*
+ * crag.enumerate.trivial_presentaions 3 xxxxxyXXy xxyyyyxxY
+9: YXyyXYYYx
+11: XyxYXYYXYYY
+11: YXYXyXyyXXy
+9: YxYXyxxyx
+10: YXYYxYxyxx
+index: 21
+ */
 
-  while (true) {
-    auto subgroup = findNonTrivialFinIndexSubgroup(a, b);
-    if (subgroup.second != 0) {
-      for (auto&& w : subgroup.first) {
-        std::cout << w << "\n";
-      }
-      std::cout << "index: " << subgroup.second << std::endl;
-    }
+struct PairsInfoData {
+  std::ostream* trivial_abel;
+  std::ostream* no_simple_reduction;
+  std::ostream* no_conjugation_reduction;
+  std::ostream* trivial;
+  std::ostream* non_trivial_finite;
+  std::ostream* non_trivial_with_fis;
+  std::ostream* unknown;
+
+  size_t count{};
+};
+
+bool CheckPair(const CWord& u, const CWord& v, PairsInfoData& data) {
+  if (!hasTrivialAbelianisation(u, v)) {
+    return false;
   }
 
-  return 0;
-//  findBestSubgroup(CWord("xxxyxYxy"), CWord("xxxYXyyXY"));
-  /* findBestSubgroup(CWord("xxxxxyXXy"), CWord("xxyyyyxxY"));
-   * 10: YXyXyyyXXy
-9: YxYYYxYxx
-10: yyxxyxYYxx
-index: 8
-   */
+  if (v < u) {
+    return false;
+  }
 
-  /* findBestSubgroup(CWord("xxxxyXy"), CWord("xxYxyyyyyxY"));
-   * 2: xx
-9: YXyyXXYYY
-7: yxxyyxx
-index: 8
-   */
+  ++data.count;
 
+  (*data.trivial_abel) << data.count << " " << u << " " << v << "\n";
 
-  findBestSubgroup(CWord("xxxyXXYXY"), CWord("xyyXyXYYY"));
-  findBestSubgroup(CWord("xxxyXXYYY"), CWord("xyxYYXYxY"));
-  findBestSubgroup(CWord("xxxyxxYXY"), CWord("xyyXyXYYY"));
-  findBestSubgroup(CWord("xxxyxxYXY"), CWord("xyyyXYYxY"));
-  findBestSubgroup(CWord("xxxyxxYYY"), CWord("xyXYYXyXy"));
-  findBestSubgroup(CWord("xxxyxyXXY"), CWord("xyyyXYYxY"));
-  findBestSubgroup(CWord("xxxyxyyXY"), CWord("xxYxYXyyy"));
+  CWord::size_type common_part_length, common_u_begin, common_v_begin;
+  std::tie(common_u_begin, common_v_begin, common_part_length) = LongestCommonSubwordCyclic(u, v);
+  if (common_part_length > v.size() / 2 || common_part_length > u.size() / 2) {
+    return false;
+  }
 
-  /*
-  findBestSubgroup(CWord("xxyXYxYXy"), CWord("xyXYYXyxY"));
-   7: yxYYxxx
-8: yXyxxYxx
-index: 9
-   */
-  /*
-  findBestSubgroup(CWord("xxyxxyXXy"), CWord("xyyXyyxYY"));
-   8: XYXYYYxY
-2: yX
-index: 96 */
-  return 0;
+  (*data.no_simple_reduction) << data.count << " " << u << " " << v << "\n";
 
-  //we will consider words of type x..., y...
-  auto total_length = 16u;
+  if (ConjugationLengthReduction(u, v) || ConjugationLengthReduction(v, u)) {
+    return false;
+  }
 
+  (*data.no_conjugation_reduction) << data.count << " " << u << " " << v << "\n";
+
+  auto group_size = GroupSize(u, v);
+  if (group_size == 1) {
+    (*data.trivial) << data.count << " " << u << " " << v << "\n";
+    return true;
+  } else {
+    auto auto_normal_form = AutoNormalForm(u, v);
+    bool nf_conj_length_reduction =
+        ConjugationLengthReduction(auto_normal_form[0], auto_normal_form[1])
+            || ConjugationLengthReduction(auto_normal_form[1], auto_normal_form[0]);
+
+    if (group_size != 0) {
+      (*data.non_trivial_finite) <<
+          data.count << " " << u << " " << v << " " << group_size << " " << auto_normal_form << " "
+          << nf_conj_length_reduction << "\n";
+    } else {
+      auto index = findBestSubgroup(u, v);
+      if (index != 0) {
+        (*data.non_trivial_with_fis) <<
+            data.count << " " << u << " " << v << " " << index << " " << auto_normal_form << " "
+            << nf_conj_length_reduction << "\n";
+      } else {
+        (*data.unknown) << data.count << " " << u << " " << v << " " << auto_normal_form << " "
+            << nf_conj_length_reduction << "\n";
+
+      }
+    }
+    return false;
+  }
+}
+
+size_t ProcessLength(size_t total_length) {
   std::ofstream trivial_abel(std::to_string(total_length) + "_trivial_abel.txt");
   std::ofstream no_simple_reduction(std::to_string(total_length) + "_no_simple_reduction.txt");
   std::ofstream no_conjugation_reduction(std::to_string(total_length) + "_no_conjugation_reduction.txt");
   std::ofstream trivial(std::to_string(total_length) + "_trivial.txt");
-  std::ofstream non_trivial(std::to_string(total_length) + "_non_trivial.txt");
+  std::ofstream non_trivial_finite(std::to_string(total_length) + "_non_trivial_finite.txt");
+  std::ofstream non_trivial_with_fis(std::to_string(total_length) + "_non_trivial_with_fis.txt");
   std::ofstream unknown(std::to_string(total_length) + "_unknown.txt");
 
-  auto start = std::chrono::steady_clock::now();
+  std::ofstream enumerator_input("presentations_to_check.txt", std::ios::app);
 
-  auto count = 0u;
-//  auto count_nontrivial = 0u;
+  PairsInfoData data{
+      &trivial_abel,
+      &no_simple_reduction,
+      &no_conjugation_reduction,
+      &trivial,
+      &non_trivial_finite,
+      &non_trivial_with_fis,
+      &unknown
+  };
 
-  for(auto u : EnumerateWords(2, total_length - 1)) {
+  // each word should be of length at least 4
+  // othersize all presentatinos of a trivial group
+  // with an element of length 4 are known to be AC-trivial
+  for(auto u : EnumerateWords(4, total_length - 4)) {
     if (u.GetFront() == u.GetBack().Inverse()) {
       continue;
     }
@@ -420,51 +460,153 @@ index: 96 */
       if (ConjugationInverseNormalForm(v) != v) {
         continue;
       }
-      if (!hasTrivialAbelianisation(u, v)) {
-        continue;
-      }
-      if (v < u) {
-        continue;
-      }
 
-      ++count;
-
-      trivial_abel << count << " " << u << " " << v << "\n";
-
-      CWord::size_type common_part_length, common_u_begin, common_v_begin;
-      std::tie(common_u_begin, common_v_begin, common_part_length) = LongestCommonSubwordCyclic(u, v);
-      if (common_part_length > v.size() / 2 || common_part_length > u.size() / 2) {
-        continue;
-      }
-
-      no_simple_reduction << count << " " << u << " " << v << "\n";
-
-      if (ConjugationLengthReduction(u, v) || ConjugationLengthReduction(v, u)) {
-        continue;
-      }
-
-      no_conjugation_reduction << count << " " << u << " " << v << "\n";
-
-      auto group_size = GroupSize(u, v);
-      if (group_size == 1) {
-        trivial << count << " " << u << " " << v << "\n";
-      } else {
-        auto auto_normal_form = AutoNormalForm(u, v);
-        bool nf_conj_length_reduction =
-            ConjugationLengthReduction(auto_normal_form[0], auto_normal_form[1])
-            || ConjugationLengthReduction(auto_normal_form[1], auto_normal_form[0]);
-
-        if (group_size != 0) {
-          non_trivial << count << " " << u << " " << v << " " << group_size << " " << auto_normal_form << " "
-              << nf_conj_length_reduction << "\n";
-        } else {
-          unknown << count << " " << u << " " << v << " " << auto_normal_form << " "
-              << nf_conj_length_reduction << "\n";
-        }
+      if (CheckPair(u, v, data)) {
+        enumerator_input << ToString(u) << " " << ToString(v) << "\n";
       }
     }
   }
 
+  return data.count;
+}
+
+void TestSinglePair(const char* u, const char* v) {
+  std::ostringstream trivial_abel;
+  std::ostringstream no_simple_reduction;
+  std::ostringstream no_conjugation_reduction;
+  std::ostringstream trivial;
+  std::ostringstream non_trivial_finite;
+  std::ostringstream non_trivial_with_fis;
+  std::ostringstream unknown;
+
+  PairsInfoData data{
+      &trivial_abel
+      , &no_simple_reduction
+      , &no_conjugation_reduction
+      , &trivial
+      , &non_trivial_finite
+      , &non_trivial_with_fis
+      , &unknown
+  };
+
+  std::cout << u << " " << v << ": " << CheckPair(CWord(u), CWord(v), data) << "\n";
+
+  std::cout << "trivial_abel: " << trivial_abel.str() << "\n";
+  std::cout << "no_simple_reduction: " << no_simple_reduction.str() << "\n";
+  std::cout << "no_conjugation_reduction: " << no_conjugation_reduction.str() << "\n";
+  std::cout << "trivial: " << trivial.str() << "\n";
+  std::cout << "non_trivial_finite: " << non_trivial_finite.str() << "\n";
+  std::cout << "non_trivial_with_fis: " << non_trivial_with_fis.str() << "\n";
+  std::cout << "unknown: " << unknown.str() << "\n";
+}
+
+int main(int argc, char* argv[]) {
+  auto start = std::chrono::steady_clock::now();
+
+  for (auto l : {13, 14, 15, 16, 17}) {
+    std::clog << "Processing " << l << "... ";
+
+    std::clog << ProcessLength(l) << " pairs total\n";
+  }
+
   auto total_time = std::chrono::steady_clock::now() - start;
-  std::cout << "Total time: " << std::chrono::duration_cast<std::chrono::milliseconds>(total_time).count() << " ms\n";
+
+  std::clog << "Spent " << std::chrono::duration<double>(total_time).count() << " seconds\n";
+
+  return 0;
+
+//  CWord a;
+//  CWord b;
+//
+//  kCompleteCount = std::stoi(argv[1]);
+//
+//
+//  for (auto i = 2; i < argc; i += 4) {
+//    a = CWord(argv[i]);
+//    b = CWord(argv[i + 1]);
+//    CWord c = CWord(argv[i + 2]);
+//    CWord d = CWord(argv[i + 3]);
+//    auto normalized1 = AutoNormalForm(a, b);
+//    auto normalized2 = AutoNormalForm(c, d);
+//
+//    std::cout << (normalized1 == normalized2) << " " << normalized1 << " " << normalized2 << std::endl;
+//  }
+//
+//
+//  return 0;
+//
+//  while (true) {
+//    auto subgroup = findNonTrivialFinIndexSubgroup(a, b);
+//    if (subgroup.second != 0) {
+//      for (auto&& w : subgroup.first) {
+//        std::cout << w << "\n";
+//      }
+//      std::cout << "index: " << subgroup.second << std::endl;
+//    }
+//  }
+//
+//  return 0;
+////  findBestSubgroup(CWord("xxxyxYxy"), CWord("xxxYXyyXY"));
+//  /* findBestSubgroup(CWord("xxxxxyXXy"), CWord("xxyyyyxxY"));
+//   * 10: YXyXyyyXXy
+//9: YxYYYxYxx
+//10: yyxxyxYYxx
+//index: 8
+//   */
+//
+//  /* findBestSubgroup(CWord("xxxxyXy"), CWord("xxYxyyyyyxY"));
+//   * 2: xx
+//9: YXyyXXYYY
+//7: yxxyyxx
+//index: 8
+//   */
+//
+//
+//  findBestSubgroup(CWord("xxxyXXYXY"), CWord("xyyXyXYYY"));
+//  findBestSubgroup(CWord("xxxyXXYYY"), CWord("xyxYYXYxY"));
+//  findBestSubgroup(CWord("xxxyxxYXY"), CWord("xyyXyXYYY"));
+//  findBestSubgroup(CWord("xxxyxxYXY"), CWord("xyyyXYYxY"));
+//  findBestSubgroup(CWord("xxxyxxYYY"), CWord("xyXYYXyXy"));
+//  findBestSubgroup(CWord("xxxyxyXXY"), CWord("xyyyXYYxY"));
+//  findBestSubgroup(CWord("xxxyxyyXY"), CWord("xxYxYXyyy"));
+//
+//  /*
+//  findBestSubgroup(CWord("xxyXYxYXy"), CWord("xyXYYXyxY"));
+//   7: yxYYxxx
+//8: yXyxxYxx
+//index: 9
+//   */
+//  /*
+//  findBestSubgroup(CWord("xxyxxyXXy"), CWord("xyyXyyxYY"));
+//   8: XYXYYYxY
+//2: yX
+//index: 96 */
+//  return 0;
+
+  //we will consider words of type x..., y...
+
+//  auto start = std::chrono::steady_clock::now();
+//
+//  auto count = 0u;
+////  auto count_nontrivial = 0u;
+//
+//  for(auto u : EnumerateWords(2, total_length - 1)) {
+//    if (u.GetFront() == u.GetBack().Inverse()) {
+//      continue;
+//    }
+//    if (ConjugationInverseNormalForm(u) != u) {
+//      continue;
+//    }
+//    for (auto v : EnumerateWords(total_length - u.size())) {
+//      if (v.GetFront() == v.GetBack().Inverse()) {
+//        continue;
+//      }
+//      if (ConjugationInverseNormalForm(v) != v) {
+//        continue;
+//      }
+//    }
+//  }
+//
+//  auto total_time = std::chrono::steady_clock::now() - start;
+//  std::cout << "Total time: " << std::chrono::duration_cast<std::chrono::milliseconds>(total_time).count() << " ms\n";
 }
