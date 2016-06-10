@@ -41,6 +41,23 @@ class CWordTuple {
     return *this;
   }
 
+  constexpr void Reverse() {
+    auto first = begin();
+    auto last = end();
+    while ((first!=last)&&(first!=--last)) {
+      CWord c = std::move(*first);
+      *first = std::move(*last);
+      *last = std::move(c);
+      ++first;
+    }
+  }
+
+  constexpr CWordTuple GetReversed() const {
+    auto copy = *this;
+    copy.Reverse();
+    return copy;
+  }
+
   constexpr CWord& operator[](size_t i) {
     return words_[i];
   }
@@ -65,20 +82,86 @@ class CWordTuple {
     return N;
   }
 
+  constexpr auto length() const {
+    auto result = 0u;
+    for (auto&& elem : *this) {
+      result += elem.size();
+    }
+    return result;
+  }
+
   constexpr bool operator<(const CWordTuple& other) const {
-    auto mismatch = std::mismatch(begin(), end(), other.begin());
+    auto this_length = this->length();
+    auto other_length = other.length();
+    if (this_length != other_length) {
+      return this_length < other_length;
+    }
+
+    auto mismatch = std::mismatch(begin(), end(), other.begin(), [](const auto& a, const auto& b) { return a.size() == b.size(); });
+    if (mismatch.first != end()) {
+      return mismatch.first->size() < mismatch.second->size();
+    }
+
+    mismatch = std::mismatch(begin(), end(), other.begin());
     if (mismatch.first == end()) {
       return false;
     }
     return *mismatch.first < *mismatch.second;
   }
 
+  constexpr bool operator<=(const CWordTuple& other) const {
+    auto this_length = this->length();
+    auto other_length = other.length();
+    if (this_length != other_length) {
+      return this_length < other_length;
+    }
+
+    auto mismatch = std::mismatch(begin(), end(), other.begin(), [](const auto& a, const auto& b) { return a.size() == b.size(); });
+    if (mismatch.first != end()) {
+      return mismatch.first->size() < mismatch.second->size();
+    }
+
+    mismatch = std::mismatch(begin(), end(), other.begin());
+    if (mismatch.first == end()) {
+      return true;
+    }
+    return *mismatch.first < *mismatch.second;
+  }
+
+  constexpr bool operator>(const CWordTuple& other) const {
+    return !(*this <= other);
+  }
+
+  constexpr bool operator>=(const CWordTuple& other) const {
+    return !(*this < other);
+  }
+
   constexpr bool operator==(const CWordTuple& other) const {
     return std::mismatch(begin(), end(), other.begin()).first == end();
+  }
+  constexpr bool operator!=(const CWordTuple& other) const {
+    return !(*this == other);
   }
  private:
   std::array<CWord, N> words_;
 };
+template<size_t N>
+std::ostream& operator<<(std::ostream& out, const CWordTuple<N>& t) {
+  if (t.size() == 1) {
+    return out << t[0];
+  }
+  out << "(";
+  bool is_first = true;
+  for (auto&& w : t) {
+    if (!is_first) {
+      out << ",";
+    } else {
+      is_first = false;
+    }
+    out << w;
+  }
+  return out << ")";
+}
 
 //! Return the minimal cyclic permutation of @p w in CWord's order
 CWord LeastCyclicPermutation(const CWord& w);
@@ -96,6 +179,14 @@ template<size_t N>
 CWordTuple<N> ConjugationInverseNormalForm(CWordTuple<N> words) {
   std::transform(words.begin(), words.end(), words.begin(), [](const CWord& w) { return ConjugationInverseNormalForm(w); });
   return words;
+}
+
+inline CWordTuple<2> ConjugationInverseFlipNormalForm(CWordTuple<2> tuple) {
+  tuple = ConjugationInverseNormalForm(tuple);
+  if (tuple[1] < tuple[0]) {
+    tuple.Reverse();
+  }
+  return tuple;
 }
 
 template<size_t N>
@@ -147,27 +238,29 @@ boost::optional<std::pair<CWordTuple<N>, Endomorphism>> WhiteheadReduce(const CW
 };
 
 template<size_t N>
-CWordTuple<N> MinimalElementInAutomorphicOrbit(CWordTuple<N> words) {
-  bool length_is_decreasing = true;
-  while (length_is_decreasing) {
-    auto reduced = WhiteheadReduce(words);
+CWordTuple<N> WhitheadMinLengthTuple(CWordTuple<N> tuple) {
+  while (true) {
+    auto reduced = WhiteheadReduce(tuple);
     if (reduced) {
-      length_is_decreasing = true;
-      words = reduced->first;
+      tuple = reduced->first;
     } else {
-      length_is_decreasing = false;
+      return tuple;
     }
   }
+}
 
-  auto minimal_length = Length(words);
+template<size_t N>
+void CompleteWithShortestAutoImages(std::set<CWordTuple<N>>* tuples) {
+  //Require that all elements of words are Whitehead-normalized
+  assert(std::all_of(tuples->begin(), tuples->end(), [](auto& a) { return WhiteheadReduce(a) == boost::none; }));
 
-  words = LeastCyclicPermutation(words);
-
-  std::set<CWordTuple<N>> minimal_orbit = {words};
-  std::deque<const CWordTuple<N>*> to_check = {&words};
+  std::deque<const CWordTuple<N>*> to_check;
+  for (auto&& t : *tuples) {
+    to_check.push_back(&t);
+  }
 
   auto addElement = [&](const CWordTuple<N>& new_element) {
-    auto result = minimal_orbit.insert(new_element);
+    auto result = tuples->insert(new_element);
     if (result.second) {
       to_check.emplace_back(&*result.first);
     }
@@ -195,8 +288,9 @@ CWordTuple<N> MinimalElementInAutomorphicOrbit(CWordTuple<N> words) {
     for (auto&& e : kWhiteheadAutomorphisms) {
       try {
         auto image = Apply(e, *to_check.front());
-        assert(Length(image) >= minimal_length);
-        if (Length(image) == minimal_length) {
+        assert(Length(image) >= Length(*to_check.front()));
+        if (Length(image) == Length(*to_check.front())) {
+          //since we consider cyclic words, choose the minimal cyclic shift of each
           addElement(LeastCyclicPermutation(image));
         }
       }
@@ -204,8 +298,22 @@ CWordTuple<N> MinimalElementInAutomorphicOrbit(CWordTuple<N> words) {
     }
     to_check.pop_front();
   }
+}
 
-  return *minimal_orbit.begin();
+template<size_t N>
+std::set<CWordTuple<N>> ShortestAutomorphicImages(CWordTuple<N> words) {
+  words = WhitheadMinLengthTuple(words);
+  words = LeastCyclicPermutation(words);
+
+  std::set<CWordTuple<N>> minimal_orbit = {words};
+
+  CompleteWithShortestAutoImages(&minimal_orbit);
+  return minimal_orbit;
+}
+
+template<size_t N>
+inline CWordTuple<N> MinimalElementInAutomorphicOrbit(const CWordTuple<N>& w) {
+  return *ShortestAutomorphicImages(w).begin();
 }
 
 inline CWord MinimalElementInAutomorphicOrbit(CWord w) {

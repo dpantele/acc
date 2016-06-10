@@ -20,6 +20,7 @@ CWord LeastCyclicPermutation(const CWord& w) {
   return min;
 }
 CWord ConjugationInverseNormalForm(const CWord& w) {
+  assert(w.Empty() || w.GetBack().Inverse() != w.GetFront());
   auto min_w = LeastCyclicPermutation(w);
   auto min_i = LeastCyclicPermutation(w.Inverse());
   if (min_w < min_i) {

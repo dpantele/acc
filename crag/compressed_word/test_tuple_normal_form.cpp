@@ -10,6 +10,7 @@
 #include <iterator>
 #include <chrono>
 #include <random>
+
 namespace crag {
 namespace {
 
@@ -44,7 +45,7 @@ TEST(TupleNormalForm, StressRandom) {
   using namespace std::chrono_literals;
   using Clock = std::chrono::steady_clock;
 
-  auto pickRandomNielsenAuto = [&](auto generator) {
+  auto pickRandomNielsenAuto = [&](auto& generator) {
     constexpr const Endomorphism aut_generators[] = {
         {"y", "x"},
         {"X", "y"},
@@ -73,7 +74,8 @@ TEST(TupleNormalForm, StressRandom) {
 
     while (Clock::now() - example_start < 1s) {
       try {
-        auto image = pickRandomNielsenAuto(generator).Apply(getRandomGeneratedWord());
+        auto word = getRandomGeneratedWord();
+        auto image = pickRandomNielsenAuto(generator).Apply(word);
         if (image.size() + 2 >= CWord::kMaxLength) {
           continue;
         }
@@ -87,7 +89,7 @@ TEST(TupleNormalForm, StressRandom) {
         }
       } catch (std::length_error&) { }
     }
-    EXPECT_GT(generated_words.size(), 500);
+    EXPECT_GT(generated_words.size(), 500u);
   }
 }
 

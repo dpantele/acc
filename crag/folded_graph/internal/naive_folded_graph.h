@@ -48,9 +48,9 @@ class NaiveFoldedGraph2 {
 
   struct Edge {
     std::tuple<Vertex, Label, Vertex> data_;
-    template<typename ... Args>
-    Edge(Args&&... args)
-        : data_(std::forward<Args>(args)...)
+
+    Edge(Vertex v1, Label l, Vertex v2)
+        : data_(std::move(v1), std::move(l), std::move(v2))
     { }
 
     bool operator<(const Edge& other) const {

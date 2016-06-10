@@ -137,7 +137,7 @@ TEST(LongestCommonSubwordCyclic, StressTest) {
       << " vs "
       << std::chrono::duration_cast<std::chrono::milliseconds>(naive_op_duration).count()
       << std::endl;
-  ASSERT_GT(repeat, 10000);
+  ASSERT_GT(repeat, 10000u);
 }
 
 }

@@ -255,7 +255,7 @@ TEST(FoldedGraphHarvest, StressRootHarvestCompareWithNaive) {
       << " vs "
       << std::chrono::duration_cast<std::chrono::milliseconds>(harvest_naive_duration).count()
       << std::endl;
-  ASSERT_GT(repeat, 10000);
+  ASSERT_GT(repeat, 10000u);
 }
 
 Word MinCycle(Word word) {

@@ -44,6 +44,15 @@ public:
   //! Construct a power of a letter
   constexpr CWord(size_type count, Letter letter);
 
+  //! Special structur used to efficently dump & restore the CWord
+  struct Dump {
+    size_type length;
+    uint64_t letters;
+  };
+
+  constexpr CWord(Dump d);
+  constexpr Dump GetDump() const;
+
   //! Construct from an X-Y string
   explicit CWord(const std::string& letters) 
     : CWord(letters.c_str())
@@ -113,6 +122,15 @@ public:
   //! Lexicographic order
   constexpr bool operator < (const CWord& other) const {
     return size_ == other.size_ ?  letters_ < other.letters_ : size_ < other.size_;
+  }
+  constexpr bool operator <= (const CWord& other) const {
+    return size_ == other.size_ ?  letters_ <= other.letters_ : size_ < other.size_;
+  }
+  constexpr bool operator > (const CWord& other) const {
+    return !(*this <= other);
+  }
+  constexpr bool operator >= (const CWord& other) const {
+    return !(*this < other);
   }
 
   constexpr bool operator == (const CWord& other) const {
@@ -329,6 +347,16 @@ constexpr CWord& CWord::ToNextWord() {
   return *this;
 }
 
+constexpr CWord::CWord(Dump d)
+  : size_(d.length)
+  , letters_(d.letters)
+{ }
+
+constexpr CWord::Dump CWord::GetDump() const {
+  return CWord::Dump{size_, letters_};
+}
+
+
 constexpr CWord operator+(CWord lhs, CWord rhs) {
   lhs.PushBack(rhs);
   return lhs;
@@ -354,10 +382,15 @@ inline std::ostream& operator<<(std::ostream& out, const CWord& w) {
   return out;
 }
 
-inline std::string ToString(const CWord& w) {
-  std::ostringstream out;
-  PrintTo(w, &out);
-  return out.str();
+inline std::string ToString(CWord w) {
+  std::string out;
+  out.reserve(w.size());
+  while (!w.Empty()) {
+    out.push_back(w.GetFront().AsChar());
+    w.PopFront();
+  }
+
+  return out;
 }
 
 class RandomWord {

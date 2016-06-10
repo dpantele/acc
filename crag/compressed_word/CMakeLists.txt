@@ -8,6 +8,8 @@ add_library(crag_compressed_word STATIC
     xy_letter.h)
 
 target_compile_features(crag_compressed_word PUBLIC cxx_relaxed_constexpr)
+set_target_properties(crag_compressed_word PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED ON)
+
 
 add_executable(crag.compressed_word.test_xy_letter test_xy_letter.cpp)
 target_link_libraries(crag.compressed_word.test_xy_letter PRIVATE gtest_main)
@@ -18,11 +20,20 @@ add_test(
 
 
 add_executable(crag.compressed_word.test_compressed_word test_compressed_word.cpp tuple_normal_form.cpp tuple_normal_form.h)
-target_link_libraries(crag.compressed_word.test_compressed_word PRIVATE gtest_main crag_compressed_word)
+target_link_libraries(crag.compressed_word.test_compressed_word PRIVATE gtest_main crag_compressed_word PUBLIC Boost::boost)
 add_test(
     NAME crag.compressed_word.test_compressed_word
     COMMAND crag.compressed_word.test_compressed_word
 )
+
+add_executable(crag.compressed_word.test_endomorphism test_endomorphism.cpp)
+target_link_libraries(crag.compressed_word.test_endomorphism PRIVATE gtest_main crag_compressed_word)
+add_test(
+    NAME crag.compressed_word.test_endomorphism
+    COMMAND crag.compressed_word.test_endomorphism
+)
+
+
 
 add_library(crag_compressed_word_longest_common_subword_cyclic STATIC
   longest_common_subword_cyclic.h
@@ -58,5 +69,8 @@ add_executable(crag.compressed_word.test_tuple_normal_form test_tuple_normal_for
 target_link_libraries(crag.compressed_word.test_tuple_normal_form
     PRIVATE crag_compressed_word_tuple_normal_form gtest_main)
 
+add_executable(crag.compressed_word.profile_tuple_normal_form profile_tuple_normal_form.cpp)
+target_link_libraries(crag.compressed_word.profile_tuple_normal_form
+    PRIVATE crag_compressed_word_tuple_normal_form)
 
 # add_executable(crag.compressed_word.test_xy_letter test_xy_letter.cpp)

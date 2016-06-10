@@ -12,6 +12,7 @@
 
 #include <compressed_word/compressed_word.h>
 #include "modulus.h"
+#include <boost/optional.hpp>
 
 namespace crag {
 
@@ -26,23 +27,10 @@ class FoldedGraph
 
   struct EdgeData
   {
-//   public:
-//    friend class FoldedGraph::Vertex;
-
     explicit operator bool() const {
       return terminus_ != nullptr;
     }
 
-//    const Vertex& terminus() const {
-//      assert(terminus_);
-//      return *terminus_;
-//    }
-//
-//    Weight weight() const {
-//      return weight_;
-//    }
-//
-//   private:
     Vertex* terminus_ = nullptr;
     Weight weight_ = 0;
   };
@@ -80,6 +68,15 @@ class FoldedGraph
       explicit operator bool() const {
         return static_cast<bool>(*edge_);
       }
+
+      bool operator==(const EdgeDataAccess& other) const {
+        return edge_ == other.edge_ && label_ == other.label_;
+      }
+
+      bool operator!=(const EdgeDataAccess& other) const {
+        return !(*this == other);
+      }
+
 
      private:
       EdgeIter edge_;
@@ -236,7 +233,7 @@ class FoldedGraph
 
   FoldedGraph()
       : vertices_(1)
-        , root_(&vertices_.front()) {
+      , root_(&vertices_.front()) {
   }
 
   Vertex& root() {
@@ -255,7 +252,6 @@ class FoldedGraph
     typedef typename BaseIter::value_type value_type;
     typedef typename BaseIter::pointer pointer;
     typedef typename BaseIter::reference reference;
-    typedef typename BaseIter::size_type size_type;
     typedef typename BaseIter::difference_type difference_type;
 
     VertexIterT(BaseIter iter, BaseIter end)
@@ -403,6 +399,17 @@ class FoldedGraph
     PushCycle(w, &root(), weight);
   }
 
+  boost::optional<Word> FindShortestPath(const Vertex& from, const Vertex& to) const;
+  boost::optional<Word> FindShortestCycle(const Vertex& base) const;
+
+  bool HasPath(const Vertex& from, const Vertex& to) const;
+  bool HasPath(const Word& label, const Vertex& from, const Vertex& to) const;
+  bool HasPath(const Word& label, Weight weight, const Vertex& from, const Vertex& to) const;
+  bool HasCycle(const Vertex& base) const;
+  bool HasCycle(const Word& label, const Vertex& base) const;
+  bool HasCycle(const Word& label, Weight weight, const Vertex& base) const;
+
+
  private:
   std::deque<Vertex> vertices_;
   Vertex* root_; //!< We need explicit root since vertices_.front() may be merged
@@ -413,9 +420,9 @@ class FoldedGraph
 };
 
 extern template
-class FoldedGraph::PathTemplate<FoldedGraph::Vertex>;
+struct FoldedGraph::PathTemplate<FoldedGraph::Vertex>;
 extern template
-class FoldedGraph::PathTemplate<const FoldedGraph::Vertex>;
+struct FoldedGraph::PathTemplate<const FoldedGraph::Vertex>;
 extern template
 class FoldedGraph::VertexIterT<std::deque<FoldedGraph::Vertex>::iterator>;
 extern template
@@ -431,6 +438,6 @@ class FoldedGraph::EdgesIteratorT<
         FoldedGraph::EdgeData
         , FoldedGraph::Word::kAlphabetSize>::const_iterator>;
 
-}
+} //namespace crag
 
 #endif //ACC_FOLDED_GRAPH_H

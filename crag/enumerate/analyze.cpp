@@ -168,7 +168,7 @@ int main() {
       });
 
   //Mark x as trivial
-  assert(canonical_types_[0].root_ == 'x');
+  assert(canonical_types_[0].root_ == CWord("x"));
   canonical_types_[0].type_ = TrivialType{};
 
   //first remove roots

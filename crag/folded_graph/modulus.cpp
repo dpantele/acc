@@ -3,6 +3,7 @@
 //
 
 #include <stdlib.h>
+#include <cstdlib>
 #include "modulus.h"
 
 namespace crag {
@@ -20,7 +21,7 @@ Weight Gcd(Weight a, Weight b) {
 }
 
 void Modulus::EnsureEqual(Weight w1, Weight w2) {
-  modulus_ = Gcd(abs(Reduce(w1 - w2)), modulus_);
+  modulus_ = Gcd(std::abs(Reduce(w1 - w2)), modulus_);
 }
 
 
