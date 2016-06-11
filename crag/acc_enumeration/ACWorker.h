@@ -14,7 +14,15 @@
 #include "Terminator.h"
 
 inline crag::CWord::size_type MaxHarvestLength(const ACClass& c) {
-  return static_cast<crag::CWord::size_type>(c.minimal()[0].size() + c.minimal()[1].size());
+  auto base_size = c.minimal()[0].size() + c.minimal()[1].size();
+  if (base_size > 20) {
+    return base_size;
+  }
+  if (base_size < 15) {
+    return 16;
+  }
+
+  return static_cast<crag::CWord::size_type>(base_size + 2);
 };
 
 struct ACTasksData {
