@@ -107,6 +107,8 @@ struct ACWorker {
     std::vector<ACClass*> classes_to_merge;
     std::vector<ACPair> pairs_to_add;
     std::vector<ACPair> pairs_to_process;
+
+    bool got_trivial_class = false;
   };
 
   void ACMMove(const ACPair& uv_pair, bool is_flipped, const PairInfo& pair_info,
@@ -150,6 +152,13 @@ struct ACWorker {
     stats->HarvestClick();
     auto harvested_words = Harvest(pair_info.harvest_limit, 1, &g);
     stats->HarvestClick();
+    stats->SetHarvestedPairs(harvested_words.size());
+
+    if (harvested_words.front().size() < 4 || harvested_words.front().size() + v.size() < 13) {
+      step_data->got_trivial_class = true;
+      return;
+    }
+
     std::vector<CWordTuple<2>> new_tuples;
     new_tuples.reserve(harvested_words.size());
 
@@ -170,8 +179,6 @@ struct ACWorker {
 
     state_dump.DumpHarvestEdges(uv_pair, new_tuples, is_flipped);
 
-    stats->SetHarvestedPairs(harvested_words.size());
-
     if (use_automorphisms) {
       for (auto& new_tuple : new_tuples) {
         stats->WhiteheadReduceClick();
@@ -180,6 +187,12 @@ struct ACWorker {
         stats->ConjNormalizeClick();
         normalized_tuple = ConjugationInverseFlipNormalForm(normalized_tuple);
         stats->ConjNormalizeClick();
+
+        if (normalized_tuple.length() < 13 || normalized_tuple[0].size() < 4) {
+          step_data->got_trivial_class = true;
+          return;
+        }
+
         if (normalized_tuple != new_tuple) {
           state_dump.DumpAutomorphEdge(new_tuple, normalized_tuple, false);
           new_tuple = normalized_tuple;
@@ -228,6 +241,11 @@ struct ACWorker {
           stats->ConjNormalizeClick();
           image = ConjugationInverseFlipNormalForm(image);
           stats->ConjNormalizeClick();
+
+          if (image[0].size() < 4) {
+            step_data->got_trivial_class = true;
+            return;
+          }
 
           //all pairs in the min orbit are added to index so that later we could check fast a non-auto-normalized pair
           step_data->pairs_to_add.push_back(image);
@@ -281,7 +299,7 @@ struct ACWorker {
     }
   }
 
-  void ReportACMoveStats(const ACPair& p, bool swapped, const PairInfo& info, const MoveStats& stats) {
+  void ReportACMoveStats(const ACPair& p, bool swapped, const PairInfo& info, const ProcessStepData& step_data, const MoveStats& stats) {
     ClickTimer::Duration all_time{};
 
     auto GetMs = [](auto t) {
@@ -322,10 +340,11 @@ struct ACWorker {
     if (Config::StatsToStdout::kShort == state_->data.config.stats_to_stout_) {
       state_->worker_stats->Write(nullptr,
           true, [&] (fmt::MemoryWriter& out) {
-            out.write("{:7d}, {:7.4f}, {:2}, {:2},{:5}, {:5}, {:5}\n",
+            out.write("{:7d}, {:7.4f}, {:2}, {:2},{:5},{:5}, {:7}, {:7}\n",
                 state_->data.queue->GetTasksCount(),
                 std::chrono::duration<double>(stats.total_time.Total()).count(),
-                p[0].size(), p[1].size(), info.use_automorphisms,
+                p[0].size(), p[1].size(),
+                info.use_automorphisms, step_data.got_trivial_class,
                 stats.GetHarvestedPairs(),
                 stats.GetAddedPairs()
             );
@@ -358,19 +377,26 @@ struct ACWorker {
     first_move.TotalClick();
     ACMMove(pair, false, pair_info, &step_data, &first_move);
     first_move.TotalClick();
-    ReportACMoveStats(pair, false, pair_info, first_move);
+    ReportACMoveStats(pair, false, pair_info, step_data, first_move);
 
-    MoveStats second_move;
-    second_move.TotalClick();
-    ACMMove(pair, true, pair_info, &step_data, &second_move);
-    second_move.TotalClick();
-    ReportACMoveStats(pair, true, pair_info, second_move);
+    if (!step_data.got_trivial_class) {
+      MoveStats second_move;
+      second_move.TotalClick();
+      ACMMove(pair, true, pair_info, &step_data, &second_move);
+      second_move.TotalClick();
+      ReportACMoveStats(pair, true, pair_info, step_data, second_move);
+    }
 
     state_->data.dump->DumpVertexHarvest(pair, pair_info.harvest_limit, pair_info.complete_count);
 
     //and finally we write the results
     {
       auto final_lock = WritingLock();
+
+      if (step_data.got_trivial_class) {
+        pair_info.p_class->Merge(state_->trivial_class);
+        return ProcessedStats(pair, std::move(final_lock));
+      }
 
       for (auto&& other_class : step_data.classes_to_merge) {
         pair_info.p_class->Merge(other_class);
