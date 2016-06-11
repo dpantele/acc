@@ -4,9 +4,11 @@
 
 #include "ACWorker.h"
 
+#include <chrono>
+#include <regex>
+
 #include "acc_class.h"
 #include "ACWorkerStats.h"
-#include "stopwatch.h"
 
 #include <boost/thread/locks.hpp>
 #include <boost/thread/shared_mutex.hpp>
@@ -14,7 +16,6 @@
 #include <crag/folded_graph/complete.h>
 #include <crag/folded_graph/folded_graph.h>
 #include <crag/folded_graph/harvest.h>
-#include <regex>
 
 using namespace crag;
 
@@ -29,6 +30,7 @@ struct WorkersSharedState {
   size_t index_size = 0;
   size_t processed_count = 0;
 
+  std::chrono::system_clock::time_point last_report = std::chrono::system_clock::now();
   boost::shared_mutex state_mutex_;
 };
 
@@ -247,13 +249,33 @@ struct ACWorker {
   };
 
   void ProcessedStats(const ACPair& p, boost::unique_lock<boost::shared_mutex> final_lock) {
-    if (++state_->processed_count % 1000 == 0) {
+    ++state_->processed_count;
+    auto time = std::chrono::system_clock::now();
+    if (time - state_->last_report > std::chrono::seconds(5)) {
+      state_->last_report = std::chrono::system_clock::now();
+
       std::clog << state_->processed_count << "/" << state_->data.queue->GetTasksCount()
           << "/" << state_->data.ac_index->size() << "\n";
+      std::map<crag::CWord::size_type, size_t> lengths_counts;
+      auto distinct_count = 0u;
       for (auto&& c : state_->data.ac_classes) {
         if (c.IsPrimary()) {
-          c.DescribeForLog(&std::clog);
-          std::clog << "\n";
+          ++distinct_count;
+          ++lengths_counts[c.minimal()[0].size() + c.minimal()[1].size()];
+        }
+      }
+
+      fmt::print(std::clog, "Distinct classes: {}\n", distinct_count);
+      if (distinct_count < 100) {
+        for (auto&& c : state_->data.ac_classes) {
+          if (c.IsPrimary()) {
+            c.DescribeForLog(&std::clog);
+            std::clog << "\n";
+          }
+        }
+      } else {
+        for (auto&& length : lengths_counts) {
+          fmt::print(std::clog, "Length {}: {}\n", length.first, length.second);
         }
       }
     }

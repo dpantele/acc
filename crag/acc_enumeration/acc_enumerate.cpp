@@ -209,10 +209,33 @@ void EnumerateAC(path config_path) {
     }
   }
 
+  std::map<crag::CWord::size_type, size_t> lengths_counts;
+  auto total_count = 0u;
+  auto distinct_count = 0u;
+
   for (auto&& c : ac_classes) {
-    c.DescribeForLog(&std::clog);
-    std::clog << "\n";
+    ++total_count;
+    if (c.IsPrimary()) {
+      ++distinct_count;
+      ++lengths_counts[c.minimal()[0].size() + c.minimal()[1].size()];
+    }
   }
+
+  fmt::print(std::clog, "Loaded {} classes, {} are distinct now\n", total_count, distinct_count);
+
+  if (distinct_count < 100) {
+    for (auto&& c : ac_classes) {
+      if (c.IsPrimary() || total_count < 100) {
+        c.DescribeForLog(&std::clog);
+        std::clog << "\n";
+      }
+    }
+  } else {
+    for (auto&& length : lengths_counts) {
+      fmt::print(std::clog, "Length {}: {}\n", length.first, length.second);
+    }
+  }
+
 
   ACTasksData data{
       config      , // const Config& config;
