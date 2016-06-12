@@ -148,9 +148,13 @@ struct ACWorker {
 
     stats->SetGraphMaxWeight(static_cast<size_t>(max_weight));
 
-    //harvest all cycles of weight \pm
+    //harvest all cycles of weight \pm 1
+    auto harvest_limit = pair_info.harvest_limit;
+    if (harvest_limit + v.size() > kMaxTotalPairLength) {
+      harvest_limit = kMaxTotalPairLength - v.size();
+    }
     stats->HarvestClick();
-    auto harvested_words = Harvest(pair_info.harvest_limit, 1, &g);
+    auto harvested_words = Harvest(harvest_limit, 1, &g);
     stats->HarvestClick();
     stats->SetHarvestedPairs(harvested_words.size());
 

@@ -13,6 +13,8 @@
 #include "state_dump.h"
 #include "Terminator.h"
 
+static constexpr crag::CWord::size_type kMaxTotalPairLength = 26u;
+
 inline crag::CWord::size_type MaxHarvestLength(const ACClass& c) {
   auto base_size = c.minimal()[0].size() + c.minimal()[1].size();
   if (base_size > 20) {
