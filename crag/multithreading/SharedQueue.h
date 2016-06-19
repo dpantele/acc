@@ -24,11 +24,9 @@ class mpmc_bounded_queue
 {
  public:
   mpmc_bounded_queue(size_t buffer_size)
-    : buffer_mask_(RoundUpToPwr2(buffer_size) - 1)
-    , buffer_(new cell_t[buffer_mask_ + 1])
+      : buffer_(new cell_t [buffer_size])
+      , buffer_mask_(buffer_size - 1)
   {
-    buffer_size = buffer_mask_ + 1;
-
     assert((buffer_size >= 2) &&
         ((buffer_size & (buffer_size - 1)) == 0));
     for (size_t i = 0; i != buffer_size; i += 1)
@@ -143,10 +141,6 @@ class mpmc_bounded_queue
     return dequeue_pos_.load(std::memory_order_relaxed);
   }
  private:
-  inline size_t RoundUpToPwr2(size_t n) {
-    return n;
-  }
-
   struct cell_t
   {
     std::atomic<size_t>   sequence_;
@@ -157,8 +151,8 @@ class mpmc_bounded_queue
   typedef char            cacheline_pad_t [cacheline_size];
 
   cacheline_pad_t         pad0_;
-  size_t const            buffer_mask_;
   cell_t*                 buffer_;
+  size_t const            buffer_mask_;
   cacheline_pad_t         pad1_;
   std::atomic<size_t>     enqueue_pos_;
   cacheline_pad_t         pad2_;
