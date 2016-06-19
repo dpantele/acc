@@ -24,9 +24,11 @@ class mpmc_bounded_queue
 {
  public:
   mpmc_bounded_queue(size_t buffer_size)
-      : buffer_(new cell_t [buffer_size])
-      , buffer_mask_(buffer_size - 1)
+    : buffer_mask_(RoundUpToPwr2(buffer_size) - 1)
+    , buffer_(new cell_t[buffer_mask_ + 1])
   {
+    buffer_size = buffer_mask_ + 1;
+
     assert((buffer_size >= 2) &&
         ((buffer_size & (buffer_size - 1)) == 0));
     for (size_t i = 0; i != buffer_size; i += 1)
@@ -141,6 +143,10 @@ class mpmc_bounded_queue
     return dequeue_pos_.load(std::memory_order_relaxed);
   }
  private:
+  inline size_t RoundUpToPwr2(size_t n) {
+    return n;
+  }
+
   struct cell_t
   {
     std::atomic<size_t>   sequence_;
@@ -151,8 +157,8 @@ class mpmc_bounded_queue
   typedef char            cacheline_pad_t [cacheline_size];
 
   cacheline_pad_t         pad0_;
-  cell_t*                 buffer_;
   size_t const            buffer_mask_;
+  cell_t*                 buffer_;
   cacheline_pad_t         pad1_;
   std::atomic<size_t>     enqueue_pos_;
   cacheline_pad_t         pad2_;
@@ -161,16 +167,17 @@ class mpmc_bounded_queue
 };
 }
 
-
 //! Blocking fixed-size MPMC queue
 template<typename T>
 class SharedQueue
 {
+ //! Rounds up any given number
+ struct PowerOf2;
  public:
-  SharedQueue(size_t size)
-    : size_(size)
-    , queue_(size)
-    , space_available_(static_cast<int>(size))
+  SharedQueue(PowerOf2 size)
+    : size_(size.n)
+    , queue_(size.n)
+    , space_available_(static_cast<int>(size.n))
     , elements_available_(0)
   { }
 
@@ -356,7 +363,22 @@ class SharedQueue
     }
   }
 
+  struct PowerOf2 {
+    size_t n;
 
+    /* implicit */ PowerOf2(size_t init_n)
+        : n(init_n)
+    {
+      --n;
+      n |= n >> 1;
+      n |= n >> 2;
+      n |= n >> 4;
+      n |= n >> 8;
+      n |= n >> 16;
+      n |= n >> 32;
+      ++n;
+    }
+  };
 };
 
 }} //crag::multithreading
