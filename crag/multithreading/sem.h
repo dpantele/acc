@@ -16,6 +16,7 @@
 #elif defined(__MACH__)
 #include <mach/mach.h>
 #elif defined(__unix__)
+#include <errno.h>
 #include <semaphore.h>
 #else
 

@@ -66,22 +66,37 @@ struct ACWorker {
     return boost::unique_lock<boost::shared_mutex>(state_->state_mutex_);
   }
 
-  struct PairInfo {
+  struct ACStepInfo {
     ACClass* p_class;
     bool use_automorphisms;
     bool is_trivial;
     CWord::size_type harvest_limit;
     unsigned short complete_count;
+    ACIndex::DataReadHandle index;
   };
 
-  PairInfo GetPairInfo(const ACPair& p) {
-    auto lock = ReadingLock();
-    auto pair_class = state_->data.ac_index->at(p);
-    return PairInfo{pair_class, pair_class->AllowsAutMoves(), pair_class->IsMergedWith(*state_->trivial_class),
-        MaxHarvestLength(*pair_class), 2};
+  ACStepInfo GetPairInfo(const ACPair& p) {
+    while (true) {
+      auto lock = ReadingLock();
+      auto index = state_->data.ac_index->GetData();
+      auto pair_class_pos = index.find(p);
+      if (pair_class_pos == index.end()) {
+        // it is possible that some index modifications are not committed yet
+        std::this_thread::yield();
+        continue;
+      }
+      auto pair_class = pair_class_pos->second;
+      return ACStepInfo{
+          pair_class
+          , pair_class->AllowsAutMoves()
+          , pair_class->IsMergedWith(*state_->trivial_class)
+          , MaxHarvestLength(*pair_class)
+          , 2
+          , std::move(index)};
+    }
   }
 
-  bool AutMinIsInIndex(const ACPair& pair) {
+  bool AutMinIsInIndex(const ACPair& pair, const ACIndex::DataReadHandle& index) {
     //first we find some pair of minimal length
     auto reduced_pair = WhitheadMinLengthTuple(pair);
 
@@ -93,10 +108,9 @@ struct ACWorker {
     if (reduced_pair == pair) {
       return false;
     }
-    auto lock = ReadingLock();
-    if (state_->data.ac_index->count(reduced_pair) != 0) {
+
+    if (index.count(reduced_pair) != 0) {
       //reduced pair was or will be harvested
-      lock.unlock();
       state_->data.dump->DumpAutomorphEdge(pair, reduced_pair, false);
       return true;
     }
@@ -111,7 +125,7 @@ struct ACWorker {
     bool got_trivial_class = false;
   };
 
-  void ACMMove(const ACPair& uv_pair, bool is_flipped, const PairInfo& pair_info,
+  void ACMMove(const ACPair& uv_pair, bool is_flipped, const ACStepInfo& step_info,
       ProcessStepData* step_data, MoveStats* stats
   ) {
     assert(ConjugationInverseFlipNormalForm(uv_pair) == uv_pair);
@@ -120,7 +134,7 @@ struct ACWorker {
     const CWord& v = is_flipped ? uv_pair[0] : uv_pair[1];
 
     // we either use automorphisms or don't, we don't start using them after some pair was processed
-    bool use_automorphisms = pair_info.use_automorphisms;
+    bool use_automorphisms = step_info.use_automorphisms;
 
     //to make a single ACM-move, first we need to build a FoldedGraph
     stats->GraphConstructClick();
@@ -130,7 +144,7 @@ struct ACWorker {
     g.PushCycle(u, 1);
 
     //complete this with v
-    auto complete_count = pair_info.complete_count;
+    auto complete_count = step_info.complete_count;
     while (complete_count-- > 0) {
       CompleteWith(v, &g);
     }
@@ -149,7 +163,7 @@ struct ACWorker {
     stats->SetGraphMaxWeight(static_cast<size_t>(max_weight));
 
     //harvest all cycles of weight \pm 1
-    auto harvest_limit = pair_info.harvest_limit;
+    auto harvest_limit = step_info.harvest_limit;
     if (harvest_limit + v.size() > kMaxTotalPairLength) {
       harvest_limit = kMaxTotalPairLength - v.size();
     }
@@ -212,22 +226,17 @@ struct ACWorker {
 
     stats->SetUniquePairs(static_cast<size_t>(tuples_end - new_tuple));
 
-    //! Actual merging requires write lock, we combine all writes under a single lock
-    {
-      auto read_lock = ReadingLock();
-      auto& ac_index = *state_->data.ac_index;
-      while (new_tuple != tuples_end) {
-        auto exists = ac_index.find(*new_tuple);
-        if (exists != ac_index.end()) {
-          //we merge two ac classes
-          step_data->classes_to_merge.emplace_back(exists->second);
-        } else {
-          //we move this pair to the ones which will be kept
-          *new_tuples_keep = *new_tuple;
-          ++new_tuples_keep;
-        }
-        ++new_tuple;
+    while (new_tuple != tuples_end) {
+      auto exists = step_info.index.find(*new_tuple);
+      if (exists != step_info.index.end()) {
+        //we merge two ac classes
+        step_data->classes_to_merge.emplace_back(exists->second);
+      } else {
+        //we move this pair to the ones which will be kept
+        *new_tuples_keep = *new_tuple;
+        ++new_tuples_keep;
       }
+      ++new_tuple;
     }
 
     new_tuples.erase(new_tuples_keep, new_tuples.end());
@@ -277,7 +286,7 @@ struct ACWorker {
       state_->last_report = std::chrono::system_clock::now();
 
       std::clog << state_->processed_count << "/" << state_->data.queue->GetTasksCount()
-          << "/" << state_->data.ac_index->size() << "\n";
+          << "/" << state_->data.ac_index->GetData().size() << "\n";
       std::map<crag::CWord::size_type, size_t> lengths_counts;
       auto distinct_count = 0u;
       for (auto&& c : state_->data.ac_classes) {
@@ -303,7 +312,7 @@ struct ACWorker {
     }
   }
 
-  void ReportACMoveStats(const ACPair& p, bool swapped, const PairInfo& info, const ProcessStepData& step_data, const MoveStats& stats) {
+  void ReportACMoveStats(const ACPair& p, bool swapped, const ACStepInfo& info, const ProcessStepData& step_data, const MoveStats& stats) {
     ClickTimer::Duration all_time{};
 
     auto GetMs = [](auto t) {
@@ -369,7 +378,7 @@ struct ACWorker {
       return ProcessedStats(pair, std::move(writer));
     }
     if (pair_info.use_automorphisms && !was_aut_normalized
-        && AutMinIsInIndex(pair)) {
+        && AutMinIsInIndex(pair, pair_info.index)) {
       return ProcessedStats(pair, WritingLock());
     }
 
@@ -406,10 +415,10 @@ struct ACWorker {
         pair_info.p_class->Merge(other_class);
       }
 
-      auto& ac_index = *state_->data.ac_index;
+      auto ac_index = state_->data.ac_index->NewBatch();
       for (auto&& to_add : (pair_info.use_automorphisms ? step_data.pairs_to_add : step_data.pairs_to_process)) {
         pair_info.p_class->AddPair(to_add);
-        ac_index.emplace(to_add, pair_info.p_class);
+        ac_index.Push(to_add, pair_info.p_class);
         ++state_->index_size;
       }
 
@@ -439,7 +448,7 @@ void Process(const ACTasksData& data) {
         MoveStats::stats_order);
   });
 
-  WorkersSharedState state{data, data.ac_index->at(ACPair{CWord("x"), CWord("y")}), &worker_stats};
+  WorkersSharedState state{data, data.ac_index->GetData().at(ACPair{CWord("x"), CWord("y")}), &worker_stats};
 
   std::deque<ACWorker> workers;
   while(workers.size() < data.config.workers_count_) {

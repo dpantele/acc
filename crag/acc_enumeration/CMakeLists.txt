@@ -18,7 +18,7 @@ add_library(acc_enumerate_utils
     convert_byte_count.cpp convert_byte_count.h
     external_sort.cpp external_sort.h
     state_dump.h state_dump.cpp
-    Terminator.cpp Terminator.h)
+    Terminator.cpp Terminator.h ACIndex.cpp ACIndex.h)
 
 find_package(Threads)
 

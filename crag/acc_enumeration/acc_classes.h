@@ -8,10 +8,9 @@
 #include <map>
 
 #include "acc_class.h"
+#include "ACIndex.h"
 #include "state_dump.h"
 #include "config.h"
-
-using ACIndex = std::map<ACPair, ACClass*>;
 
 class ACClasses {
  public:
@@ -33,16 +32,27 @@ class ACClasses {
   void RestoreMerges();
   void RestoreMinimums();
 
-  ACIndex
-  GetInitialACIndex() {
-    std::map<ACPair, ACClass*> index;
+  void InitACIndex(ACIndex* index) {
+    std::map<ACPair, ACClass*> pairs_classes;
     for (auto&& c : classes_) {
-      auto was_inserted = index.emplace(c.minimal(), &c);
+      auto was_inserted = pairs_classes.emplace(c.minimal(), &c);
       if (!was_inserted.second) {
         c.Merge(was_inserted.first->second);
       }
     }
-    return index;
+
+    auto initial_batch = index->NewBatch();
+
+    for (auto&& p : pairs_classes) {
+      initial_batch.Push(p.first, p.second);
+    }
+
+    initial_batch.Execute();
+
+    // make sure data is committed
+    while (index->GetData().size() < pairs_classes.size()) {
+      std::this_thread::yield();
+    }
   };
 
   std::deque<ACClass>::iterator

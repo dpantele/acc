@@ -164,12 +164,15 @@ void EnumerateAC(path config_path) {
   ac_classes.RestoreMerges();
   ac_classes.RestoreMinimums();
 
-  auto ac_index = ac_classes.GetInitialACIndex();
+  ACIndex ac_index(config);
 
   //maybe restore the index
   if (fs::exists(config.pairs_classes_in())) {
     std::string next_line;
     auto input = config.ifstream(config.pairs_classes_in());
+
+    auto expected_index_size = 0u;
+    auto initial_batch = ac_index.NewBatch();
 
     while(std::getline(input, next_line)) {
       auto split = next_line.find(' ');
@@ -180,16 +183,23 @@ void EnumerateAC(path config_path) {
       auto pair = ACStateDump::LoadPair(next_line.substr(0, split));
       auto ac_class = ac_classes.at(std::stoul(next_line.substr(split + 1)));
 
-      ac_index.emplace(pair, ac_class);
+      initial_batch.Push(pair, ac_class);
+      ++expected_index_size;
       ac_class->AddPair(pair);
     }
+
+    initial_batch.Execute();
+    while (ac_index.GetData().size() < expected_index_size) {
+      std::this_thread::yield();
+    }
+  } else {
+    ac_classes.InitACIndex(&ac_index);
   }
 
   ACPairProcessQueue to_process(config, &state_dump);
 
   if (fs::exists(config.pairs_queue_in())) {
     // we just restore the queue
-    // format: word word
     auto queue_input = config.ifstream(config.pairs_queue_in());
     std::string next_line;
     std::regex pairs_queue_in_re(fmt::format("^({}) (\\d+)$", ACStateDump::pair_dump_re));
@@ -200,8 +210,9 @@ void EnumerateAC(path config_path) {
       }
 
       ACPair elem = ACStateDump::LoadPair(pair_parsed[1]);
-      to_process.Push(elem, (std::stoul(pair_parsed[2])
-          & static_cast<size_t>(ACStateDump::PairQueueState::AutoNormalized)) != 0);
+      to_process.Push(elem,
+          (std::stoul(pair_parsed[2])
+            & static_cast<size_t>(ACStateDump::PairQueueState::AutoNormalized)) != 0);
     }
   } else {
     for (auto&& c : ac_classes) {
