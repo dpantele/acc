@@ -20,14 +20,15 @@
 #include <fmt/format.h>
 #include <fmt/ostream.h>
 
+#include <sys/time.h>
+#include <sys/resource.h>
+
 #include "acc_class.h"
 #include "acc_classes.h"
+#include "ACIndex.h"
 #include "ACPairProcessQueue.h"
 #include "Terminator.h"
 #include "ACWorker.h"
-
-#include <sys/time.h>
-#include <sys/resource.h>
 
 using namespace crag;
 
@@ -148,23 +149,23 @@ void EnumerateAC(path config_path) {
 
   ACStateDump state_dump(config);
 
-  ACClasses ac_classes(config, &state_dump);
+  std::shared_ptr<ACClasses> initial_classes_version = std::make_shared<ACClasses>(config, &state_dump);
+
 
   ACPair trivial_pair{CWord("x"), CWord("y")};
 
-  // these are trivial classes which should be excluded from harvest since
-  ac_classes.AddClass(trivial_pair);
+  // these are trivial classes which should be excluded from harvest
+  initial_classes_version->AddClass(trivial_pair);
 
-  ACClass* trivial_class = ac_classes.at(0);
   for (auto i = 1u; i <= 3u; ++i) {
-    trivial_class->Merge(ac_classes.at(i));
+    initial_classes_version->Merge(0, i);
   }
 
-  ac_classes.AddClasses(inputs);
-  ac_classes.RestoreMerges();
-  ac_classes.RestoreMinimums();
+  initial_classes_version->AddClasses(inputs);
+  initial_classes_version->RestoreMerges();
+  initial_classes_version->RestoreMinimums();
 
-  ACIndex ac_index(config);
+  ACIndex ac_index(config, initial_classes_version);
 
   //maybe restore the index
   if (fs::exists(config.pairs_classes_in())) {
@@ -181,11 +182,11 @@ void EnumerateAC(path config_path) {
       }
 
       auto pair = ACStateDump::LoadPair(next_line.substr(0, split));
-      auto ac_class = ac_classes.at(std::stoul(next_line.substr(split + 1)));
+      auto ac_class = initial_classes_version->at(std::stoul(next_line.substr(split + 1)));
 
-      initial_batch.Push(pair, ac_class);
+      initial_batch.Push(pair, ac_class->id_);
       ++expected_index_size;
-      ac_class->AddPair(pair);
+      initial_classes_version->AddPair(ac_class->id_, pair);
     }
 
     initial_batch.Execute();
@@ -193,8 +194,9 @@ void EnumerateAC(path config_path) {
       std::this_thread::yield();
     }
   } else {
-    ac_classes.InitACIndex(&ac_index);
+    initial_classes_version->InitACIndex(&ac_index);
   }
+  initial_classes_version.reset();
 
   ACPairProcessQueue to_process(config, &state_dump);
 
@@ -215,8 +217,9 @@ void EnumerateAC(path config_path) {
             & static_cast<size_t>(ACStateDump::PairQueueState::AutoNormalized)) != 0);
     }
   } else {
-    for (auto&& c : ac_classes) {
-      to_process.Push(c.minimal(), false);
+    auto ac_classes = ac_index.GetCurrentACClasses();
+    for (auto&& c : *ac_classes) {
+      to_process.Push(ac_classes->minimal_in(c.id_), false);
     }
   }
 
@@ -224,18 +227,23 @@ void EnumerateAC(path config_path) {
   auto total_count = 0u;
   auto distinct_count = 0u;
 
-  for (auto&& c : ac_classes) {
-    ++total_count;
-    if (c.IsPrimary()) {
-      ++distinct_count;
-      ++lengths_counts[c.minimal()[0].size() + c.minimal()[1].size()];
+  {
+    auto ac_classes = ac_index.GetCurrentACClasses();
+    for (auto &&c : *ac_classes) {
+      ++total_count;
+      if (c.IsPrimary()) {
+        ++distinct_count;
+        const auto &minimal = ac_classes->minimal_in(c.id_);
+        ++lengths_counts[minimal[0].size() + minimal[1].size()];
+      }
     }
   }
 
   fmt::print(std::clog, "Loaded {} classes, {} are distinct now\n", total_count, distinct_count);
 
   if (distinct_count < 100) {
-    for (auto&& c : ac_classes) {
+    auto ac_classes = ac_index.GetCurrentACClasses();
+    for (auto&& c : *ac_classes) {
       if (c.IsPrimary() || total_count < 100) {
         c.DescribeForLog(&std::clog);
         std::clog << "\n";
@@ -253,8 +261,7 @@ void EnumerateAC(path config_path) {
       t           , // const Terminator& terminator;
       &to_process , // ACPairProcessQueue* queue;
       &state_dump , // ACStateDump* dump;
-      &ac_index   , // ACIndex* ac_index;
-      ac_classes    // const ACClasses& ac_classes;
+      &ac_index     // ACIndex* ac_index;
   };
 
   Process(data);

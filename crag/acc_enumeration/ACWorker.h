@@ -15,8 +15,9 @@
 
 static constexpr crag::CWord::size_type kMaxTotalPairLength = 26u;
 
-inline crag::CWord::size_type MaxHarvestLength(const ACClass& c) {
-  auto base_size = c.minimal()[0].size() + c.minimal()[1].size();
+inline crag::CWord::size_type MaxHarvestLength(const ACClasses& classes, const ACClasses::ClassId id) {
+  const auto& minimal = classes.minimal_in(id);
+  auto base_size = minimal[0].size() + minimal[1].size();
   if (base_size > 20) {
     return base_size;
   }
@@ -33,7 +34,6 @@ struct ACTasksData {
   ACPairProcessQueue* queue;
   ACStateDump* dump;
   ACIndex* ac_index;
-  const ACClasses& ac_classes;
 };
 
 void Process(const ACTasksData&);

@@ -8,6 +8,7 @@
 #include <regex>
 
 #include "acc_class.h"
+#include "ACIndex.h"
 #include "ACWorkerStats.h"
 
 #include <boost/thread/locks.hpp>
@@ -21,7 +22,7 @@ using namespace crag;
 
 struct WorkersSharedState {
   ACTasksData data;
-  ACClass* trivial_class;
+  ACClasses::ClassId trivial_class;
   ACWorkerStats* worker_stats;
 
   //data.ac_index (and uv_classes we get from it), index_size and processed count may be changed only under reader lock
@@ -67,32 +68,48 @@ struct ACWorker {
   }
 
   struct ACStepInfo {
-    ACClass* p_class;
+    ACClasses::ClassId class_id;
     bool use_automorphisms;
     bool is_trivial;
     CWord::size_type harvest_limit;
     unsigned short complete_count;
+    std::shared_ptr<const ACClasses> classes;
     ACIndex::DataReadHandle index;
+    ACIndex::AddBatch index_writer;
+
+    ~ACStepInfo() {
+      // this has to be in specific order since Execute may not proceed
+      // if queue is too long and it will be long if index folds a reference to the current
+      // version
+      index.release();
+      classes.reset();
+      index_writer.Execute();
+    }
   };
 
   ACStepInfo GetPairInfo(const ACPair& p) {
     while (true) {
       auto lock = ReadingLock();
       auto index = state_->data.ac_index->GetData();
+      auto classes = state_->data.ac_index->GetCurrentACClasses();
       auto pair_class_pos = index.find(p);
       if (pair_class_pos == index.end()) {
         // it is possible that some index modifications are not committed yet
         std::this_thread::yield();
         continue;
       }
-      auto pair_class = pair_class_pos->second;
+      auto pair_class_id = pair_class_pos->second;
+      auto batch = state_->data.ac_index->NewBatch();
       return ACStepInfo{
-          pair_class
-          , pair_class->AllowsAutMoves()
-          , pair_class->IsMergedWith(*state_->trivial_class)
-          , MaxHarvestLength(*pair_class)
-          , 2
-          , std::move(index)};
+          pair_class_id,
+          classes->AllowsAutMoves(pair_class_id),
+          classes->AreMerged(pair_class_id, state_->trivial_class),
+          MaxHarvestLength(*classes, pair_class_id),
+          2,
+          std::move(classes),
+          std::move(index),
+          std::move(batch)
+      };
     }
   }
 
@@ -118,7 +135,7 @@ struct ACWorker {
   }
 
   struct ProcessStepData {
-    std::vector<ACClass*> classes_to_merge;
+    std::vector<ACClasses::ClassId> classes_to_merge;
     std::vector<ACPair> pairs_to_add;
     std::vector<ACPair> pairs_to_process;
 
@@ -289,16 +306,17 @@ struct ACWorker {
           << "/" << state_->data.ac_index->GetData().size() << "\n";
       std::map<crag::CWord::size_type, size_t> lengths_counts;
       auto distinct_count = 0u;
-      for (auto&& c : state_->data.ac_classes) {
+      auto ac_classes = state_->data.ac_index->GetCurrentACClasses();
+      for (auto&& c : *ac_classes) {
         if (c.IsPrimary()) {
           ++distinct_count;
-          ++lengths_counts[c.minimal()[0].size() + c.minimal()[1].size()];
+          ++lengths_counts[c.minimal_[0].size() + c.minimal_[1].size()];
         }
       }
 
       fmt::print(std::clog, "Distinct classes: {}\n", distinct_count);
       if (distinct_count < 100) {
-        for (auto&& c : state_->data.ac_classes) {
+        for (auto&& c : *ac_classes) {
           if (c.IsPrimary()) {
             c.DescribeForLog(&std::clog);
             std::clog << "\n";
@@ -352,14 +370,15 @@ struct ACWorker {
 
     if (Config::StatsToStdout::kShort == state_->data.config.stats_to_stout_) {
       state_->worker_stats->Write(nullptr,
-          true, [&] (fmt::MemoryWriter& out) {
+                                  true, [&](fmt::MemoryWriter &out) {
             out.write("{:7d}, {:7.4f}, {:2}, {:2},{:5},{:5}, {:7}, {:7}\n",
-                state_->data.queue->GetTasksCount(),
-                std::chrono::duration<double>(stats.total_time.Total()).count(),
-                p[0].size(), p[1].size(),
-                info.use_automorphisms, step_data.got_trivial_class,
-                stats.GetHarvestedPairs(),
-                stats.GetAddedPairs()
+                      state_->data.queue->GetTasksCount(),
+                      std::chrono::duration<double>(stats.total_time.Total()).count(),
+                      p[0].size(), p[1].size(),
+                      info.use_automorphisms,
+                      step_data.got_trivial_class,
+                      stats.GetHarvestedPairs(),
+                      stats.GetAddedPairs()
             );
           });
     }
@@ -374,7 +393,8 @@ struct ACWorker {
     if (Length(pair) < 13 || pair[0].size() < 4) {
       // pair is certainly trivial
       auto writer = WritingLock();
-      pair_info.p_class->Merge(state_->trivial_class);
+
+      pair_info.index_writer.Merge(pair_info.class_id, state_->trivial_class);
       return ProcessedStats(pair, std::move(writer));
     }
     if (pair_info.use_automorphisms && !was_aut_normalized
@@ -407,18 +427,18 @@ struct ACWorker {
       auto final_lock = WritingLock();
 
       if (step_data.got_trivial_class) {
-        pair_info.p_class->Merge(state_->trivial_class);
+        pair_info.index_writer.Merge(pair_info.class_id, state_->trivial_class);
         return ProcessedStats(pair, std::move(final_lock));
       }
 
+      auto& ac_index = pair_info.index_writer;
+
       for (auto&& other_class : step_data.classes_to_merge) {
-        pair_info.p_class->Merge(other_class);
+        ac_index.Merge(pair_info.class_id, other_class);
       }
 
-      auto ac_index = state_->data.ac_index->NewBatch();
       for (auto&& to_add : (pair_info.use_automorphisms ? step_data.pairs_to_add : step_data.pairs_to_process)) {
-        pair_info.p_class->AddPair(to_add);
-        ac_index.Push(to_add, pair_info.p_class);
+        ac_index.Push(to_add, pair_info.class_id);
         ++state_->index_size;
       }
 
