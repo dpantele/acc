@@ -11,13 +11,13 @@ namespace io = boost::iostreams;
 
 static void InitOstream(const Config& c, std::initializer_list<std::pair<path, BoostFilteringOStream*>> to_init) {
   for (auto&& stream : to_init) {
-    if (fs::exists(stream.first)) {
+    if (!c.should_clear_dumps() && fs::exists(stream.first)) {
       throw std::runtime_error(".dump files were not post-processed or deleted after a run");
     }
   }
 
   for (auto&& stream : to_init) {
-    *stream.second = c.ofstream(stream.first);
+    *stream.second = c.ofstream(stream.first, std::ios_base::out | std::ios_base::trunc);
     if (stream.second->fail()) {
       throw fmt::SystemError(errno, "Can\'t open {}", stream.first);
     }

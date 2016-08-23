@@ -130,6 +130,11 @@ struct Config {
     return base_dir_ / stats_dir_;
   }
 
+  bool should_clear_dumps_ = false;
+  bool should_clear_dumps() const {
+    return should_clear_dumps_;
+  }
+
   enum class StatsToStdout {
     kNo,
     kShort,
@@ -180,6 +185,7 @@ struct Config {
     dump["dump_queue_limit"] = std::to_string(dump_queue_limit_);
     dump["input"] = input_.generic_string();
     dump["stats_dir"] = stats_dir_.generic_string();
+    dump["should_clear_dumps"] = should_clear_dumps_;
 
     switch(stats_to_stout_) {
       case StatsToStdout::kNo:
@@ -208,6 +214,7 @@ struct Config {
     ConfigFromJson(config, "input", &input_);
     ConfigFromJson(config, "dump_dir", &dump_dir_);
     ConfigFromJson(config, "stats_dir", &stats_dir_);
+    ConfigFromJson(config, "should_clear_dumps", &should_clear_dumps_);
 
     std::string temp;
     ConfigFromJson(config, "stats_to_stdout", &temp);
@@ -259,6 +266,13 @@ struct Config {
     auto val = config.find(name);
     if (val != config.end()) {
       *var = val->get<std::string>();
+    }
+  }
+
+  static void ConfigFromJson(const json& config, const char* name, bool* var) {
+    auto val = config.find(name);
+    if (val != config.end()) {
+      *var = val->get<bool>();
     }
   }
 
