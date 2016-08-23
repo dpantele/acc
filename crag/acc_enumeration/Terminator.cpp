@@ -14,12 +14,14 @@
 // linux-specific version
 std::thread SpawnThread(Terminator* terminator) {
 
-  /* Block SIGINT and SIGTERM; other threads created by main()
+  /* Block SIGINT (for release builds) and SIGTERM; other threads created by main()
      will inherit a copy of the signal mask. */
 
   sigset_t set;
   sigemptyset(&set);
+#ifdef NDEBUG
   sigaddset(&set, SIGINT);
+#endif
   sigaddset(&set, SIGTERM);
   int s = pthread_sigmask(SIG_BLOCK, &set, NULL);
   if (s != 0) {
@@ -30,7 +32,9 @@ std::thread SpawnThread(Terminator* terminator) {
     sigset_t listen_to;
 
     sigemptyset(&listen_to);
+#ifdef NDEBUG
     sigaddset(&listen_to, SIGINT);
+#endif
     sigaddset(&listen_to, SIGTERM);
 
     sigset_t block_all;
