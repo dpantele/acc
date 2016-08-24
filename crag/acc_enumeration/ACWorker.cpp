@@ -25,14 +25,8 @@ struct WorkersSharedState {
   ACClasses::ClassId trivial_class;
   ACWorkerStats* worker_stats;
 
-  //data.ac_index (and uv_classes we get from it), index_size and processed count may be changed only under reader lock
-  //data.ac_index, uv_classes may be viewed only after getting a reading lock
-
-  size_t index_size = 0;
-  size_t processed_count = 0;
-
-  std::chrono::system_clock::time_point last_report = std::chrono::system_clock::now();
-  boost::shared_mutex state_mutex_;
+  std::atomic<size_t> processed_count{0u};
+  std::atomic<std::chrono::system_clock::time_point> last_report{std::chrono::system_clock::now()};
 };
 
 struct ACWorker {
@@ -59,14 +53,6 @@ struct ACWorker {
   WorkersSharedState* state_;
   std::thread worker_thread_;
 
-  boost::shared_lock<boost::shared_mutex> ReadingLock() {
-    return boost::shared_lock<boost::shared_mutex>(state_->state_mutex_);
-  }
-
-  boost::unique_lock<boost::shared_mutex> WritingLock() {
-    return boost::unique_lock<boost::shared_mutex>(state_->state_mutex_);
-  }
-
   struct ACStepInfo {
     ACClasses::ClassId class_id;
     bool use_automorphisms;
@@ -89,7 +75,6 @@ struct ACWorker {
 
   ACStepInfo GetPairInfo(const ACPair& p) {
     while (true) {
-      auto lock = ReadingLock();
       auto index = state_->data.ac_index->GetData();
       auto classes = state_->data.ac_index->GetCurrentACClasses();
       auto pair_class_pos = index.find(p);
@@ -296,14 +281,20 @@ struct ACWorker {
     stats->SetAddedPairs(step_data->pairs_to_process.size());
   };
 
-  void ProcessedStats(const ACPair& p, boost::unique_lock<boost::shared_mutex> final_lock) {
-    ++state_->processed_count;
+  void ProcessedStats(const ACPair& p) {
+    state_->processed_count.fetch_add(1, std::memory_order_release);
     auto time = std::chrono::system_clock::now();
-    if (time - state_->last_report > std::chrono::seconds(5)) {
-      state_->last_report = std::chrono::system_clock::now();
+    auto last_report = state_->last_report.load(std::memory_order_acquire);
+    if (time - last_report > std::chrono::seconds(5)
+        && state_->last_report.compare_exchange_strong(last_report, time, std::memory_order_release)) {
 
-      std::clog << state_->processed_count << "/" << state_->data.queue->GetTasksCount()
-          << "/" << state_->data.ac_index->GetData().size() << "\n";
+      fmt::MemoryWriter new_stats;
+
+      new_stats.write("{}/{}/{}\n",
+                      state_->processed_count,
+                      state_->data.queue->GetTasksCount(),
+                      state_->data.ac_index->GetData().size());
+
       std::map<crag::CWord::size_type, size_t> lengths_counts;
       auto distinct_count = 0u;
       auto ac_classes = state_->data.ac_index->GetCurrentACClasses();
@@ -314,19 +305,22 @@ struct ACWorker {
         }
       }
 
-      fmt::print(std::clog, "Distinct classes: {}\n", distinct_count);
+      new_stats.write("Distinct classes: {}\n", distinct_count);
+
       if (distinct_count < 100) {
         for (auto&& c : *ac_classes) {
           if (c.IsPrimary()) {
-            c.DescribeForLog(&std::clog);
-            std::clog << "\n";
+            c.DescribeForLog(&new_stats);
+            new_stats.write("\n");
           }
         }
       } else {
         for (auto&& length : lengths_counts) {
-          fmt::print(std::clog, "Length {}: {}\n", length.first, length.second);
+          new_stats.write("Length {}: {}\n", length.first, length.second);
         }
       }
+
+      std::clog << new_stats.c_str();
     }
   }
 
@@ -388,20 +382,17 @@ struct ACWorker {
     auto pair_info = GetPairInfo(pair);
 
     if (pair_info.is_trivial) {
-      return ProcessedStats(pair, WritingLock());
+      return ProcessedStats(pair);
     }
     if (Length(pair) < 13 || pair[0].size() < 4) {
       // pair is certainly trivial
-      auto writer = WritingLock();
-
       pair_info.index_writer.Merge(pair_info.class_id, state_->trivial_class);
-      return ProcessedStats(pair, std::move(writer));
+      return ProcessedStats(pair);
     }
     if (pair_info.use_automorphisms && !was_aut_normalized
         && AutMinIsInIndex(pair, pair_info.index)) {
-      return ProcessedStats(pair, WritingLock());
+      return ProcessedStats(pair);
     }
-
 
     // Harvest the pair and its flip
     ProcessStepData step_data;
@@ -424,11 +415,9 @@ struct ACWorker {
 
     //and finally we write the results
     {
-      auto final_lock = WritingLock();
-
       if (step_data.got_trivial_class) {
         pair_info.index_writer.Merge(pair_info.class_id, state_->trivial_class);
-        return ProcessedStats(pair, std::move(final_lock));
+        return ProcessedStats(pair);
       }
 
       auto& ac_index = pair_info.index_writer;
@@ -439,10 +428,9 @@ struct ACWorker {
 
       for (auto&& to_add : (pair_info.use_automorphisms ? step_data.pairs_to_add : step_data.pairs_to_process)) {
         ac_index.Push(to_add, pair_info.class_id);
-        ++state_->index_size;
       }
 
-      ProcessedStats(pair, std::move(final_lock));
+      ProcessedStats(pair);
     }
 
     //schedule obtained words
