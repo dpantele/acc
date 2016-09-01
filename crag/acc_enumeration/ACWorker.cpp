@@ -351,12 +351,13 @@ struct ACWorker {
         state_dump.DumpAutomorphEdges(min_tuple, minimal_orbit, true);
         step_data->pairs_to_process.push_back(min_tuple);
       }
+      stats->SetAutOrbitSize(step_data->pairs_to_process.empty() ? 0 : step_data->pairs_to_add.size() / step_data->pairs_to_process.size());
+      stats->SetAddedPairs(step_data->pairs_to_process.size());
     } else {
       step_data->pairs_to_add.insert(step_data->pairs_to_add.end(), new_tuples.begin(), new_tuples.end());
+      stats->SetAddedPairs(step_data->pairs_to_add.size());
     }
 
-    stats->SetAutOrbitSize(step_data->pairs_to_process.empty() ? 0 : step_data->pairs_to_add.size() / step_data->pairs_to_process.size());
-    stats->SetAddedPairs(step_data->pairs_to_process.size());
   };
 
   void ProcessedStats(const ACPair& p) {
