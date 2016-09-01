@@ -71,7 +71,7 @@ class ACClasses {
     while (!canonical->IsPrimary()) {
       canonical = &classes_[canonical->merged_with_];
     }
-    return &classes_[classes_.at(id).merged_with_];
+    return canonical;
   }
 
   //! Replace every merged_with_ with the final id
@@ -81,6 +81,18 @@ class ACClasses {
   void Normalize() {
     for (auto &&c : classes_) {
       c.merged_with_ = at(c.id_)->id_;
+
+      if (c.id_ % 4 == 3) {
+        auto& original = classes_.at(c.id_ - 3);
+        auto& canonical = classes_.at(original.merged_with_);
+        for (auto i = 1; i < 4; ++i) {
+          auto& image = classes_.at(original.id_ + i);
+          if (original.merged_with_ == image.merged_with_) {
+            // make sure it is allowed for canonical
+            canonical.aut_types_.set(i);
+          }
+        }
+      }
     }
   }
 
@@ -99,11 +111,23 @@ class ACClasses {
    * i.e. there is are 3 pairs of words in this class such that \phi(u, v) ~(ACM) (u, v)
    */
   bool AllowsAutMoves(ClassId id) const {
-    return at(id)->aut_types_.all();
+    return at(IdentityImageFor(id))->aut_types_.all();
   }
 
   bool AreMerged(ClassId first, ClassId second) const {
     return at(first) == at(second);
+  }
+
+  static constexpr bool IsIdent(ClassId id) {
+    return id % 4u == 0;
+  }
+
+  static constexpr ClassId IdentityImageFor(ClassId id) {
+    return id - (id % 4u);
+  }
+
+  bool AllowsAutomorphism(ClassId id, ACClass::AutKind type) const {
+    return at(id)->aut_types_.test(static_cast<size_t>(type));
   }
 
 #ifndef NDEBUG

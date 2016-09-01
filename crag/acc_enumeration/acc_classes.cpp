@@ -15,10 +15,10 @@ void ACClasses::AddClass(const ACPair& a) {
   thread_local auto x_y = Endomorphism(CWord("y"), CWord("x"));
   thread_local auto y_Y = Endomorphism(CWord("x"), CWord("Y"));
 
-  classes_.emplace_back(classes_.size(), a, ACClass::AutKind::Ident, logger_);
-  classes_.emplace_back(classes_.size(), Apply(x_xy, a), ACClass::AutKind::x_xy, logger_);
-  classes_.emplace_back(classes_.size(), Apply(x_y, a), ACClass::AutKind::x_y, logger_);
-  classes_.emplace_back(classes_.size(), Apply(y_Y, a), ACClass::AutKind::y_Y, logger_);
+  classes_.emplace_back(classes_.size(), a, a, ACClass::AutKind::Ident, logger_);
+  classes_.emplace_back(classes_.size(), a, Apply(x_xy, a), ACClass::AutKind::x_xy, logger_);
+  classes_.emplace_back(classes_.size(), a, Apply(x_y, a), ACClass::AutKind::x_y, logger_);
+  classes_.emplace_back(classes_.size(), a, Apply(y_Y, a), ACClass::AutKind::y_Y, logger_);
 }
 
 void ACClasses::RestoreMerges() {
@@ -83,7 +83,11 @@ void ACClasses::Merge(ACClasses::ClassId first_id, ACClasses::ClassId second_id)
     first->minimal_ = second->minimal_;
   }
 
-  first->aut_types_ |= second->aut_types_;
+  if (ACClasses::IdentityImageFor(first->id_) == ACClasses::IdentityImageFor(second->id_ / 4)) {
+    // same initial
+    first->aut_types_ |= second->aut_types_;
+  }
+
   first->pairs_count_ += second->pairs_count_;
 
   logger_->Merge(*first, *second);

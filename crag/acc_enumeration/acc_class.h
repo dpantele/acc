@@ -32,9 +32,16 @@ struct ACClass {
     y_Y   = 3, //!< y->Y
   };
 
-  AutKind init_kind_;
+  AutKind init_kind() const {
+    return AutKind (id_ % 4);
+  }
 
   std::bitset<4> aut_types_;
+
+  bool AllowsAutomorphism(ACClass::AutKind type) const {
+    return aut_types_.test(static_cast<size_t>(type));
+  }
+
   ACPair minimal_;
 
   /**
@@ -55,8 +62,7 @@ struct ACClass {
     return merged_with_ == id_;
   }
 
-  ACClass(size_t id, ACPair pair, AutKind kind, ACStateDump* logger);
-
+  ACClass(size_t id, ACPair initial, ACPair image, AutKind kind, ACStateDump* logger);
   // class is trivially copyable & movable
 };
 

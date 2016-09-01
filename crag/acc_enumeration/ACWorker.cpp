@@ -29,6 +29,20 @@ struct WorkersSharedState {
   std::atomic<std::chrono::system_clock::time_point> last_report{std::chrono::system_clock::now()};
 };
 
+static Endomorphism ToIdentityImageMapping(const ACClass* c) {
+  switch (c->init_kind()) {
+    case ACClass::AutKind::Ident:
+      return Endomorphism("x", "y");
+    case ACClass::AutKind::x_xy:
+      return Endomorphism("xY", "y");
+    case ACClass::AutKind::x_y:
+      return Endomorphism("y", "x");
+    case ACClass::AutKind::y_Y:
+      return Endomorphism("x", "Y");
+  }
+  assert(false);
+}
+
 struct ACWorker {
  public:
   ACWorker(WorkersSharedState* state)
@@ -76,14 +90,16 @@ struct ACWorker {
   ACStepInfo GetPairInfo(const ACPair& p) {
     while (true) {
       auto index = state_->data.ac_index->GetData();
-      auto classes = state_->data.ac_index->GetCurrentACClasses();
       auto pair_class_pos = index.find(p);
       if (pair_class_pos == index.end()) {
         // it is possible that some index modifications are not committed yet
         std::this_thread::yield();
         continue;
       }
+
+      auto classes = state_->data.ac_index->GetCurrentACClasses();
       auto pair_class_id = pair_class_pos->second;
+
       auto batch = state_->data.ac_index->NewBatch();
       return ACStepInfo{
           pair_class_id,
@@ -120,8 +136,8 @@ struct ACWorker {
   }
 
   struct ProcessStepData {
-    std::vector<ACClasses::ClassId> classes_to_merge;
-    std::vector<ACPair> pairs_to_add;
+    std::vector<std::pair<ACClasses::ClassId, ACClasses::ClassId>> classes_to_merge;
+    std::vector<std::pair<ACPair, ACClasses::ClassId>> pairs_to_add;
     std::vector<ACPair> pairs_to_process;
 
     bool got_trivial_class = false;
@@ -179,8 +195,43 @@ struct ACWorker {
       return;
     }
 
-    std::vector<CWordTuple<2>> new_tuples;
-    new_tuples.reserve(harvested_words.size());
+    std::vector<std::pair<Endomorphism, ACClasses::ClassId>> automorphic_classes;
+    if (!use_automorphisms) {
+      // find all automorphic_classes
+      const auto& classes = *step_info.classes;
+      auto original_class = classes.at(step_info.class_id);
+      auto identity_image = classes.at(classes.IdentityImageFor(step_info.class_id));
+      auto to_identity_mapping = ToIdentityImageMapping(original_class);
+
+      auto pushClass = [&](const Endomorphism& e, ACClass::AutKind type) {
+        if (identity_image->AllowsAutomorphism(type)) {
+          // the identity class is always considered primary
+          // so if original_class is already merged with identity_image
+          // then we add the new pairs to identity_image
+          // so happens with any other automorphic images
+          return;
+        }
+
+        automorphic_classes.emplace_back(to_identity_mapping.ComposeWith(e),
+                                         identity_image->id_ + static_cast<size_t>(type));
+      };
+
+      thread_local auto ident = Endomorphism(CWord("x"), CWord("y"));
+      thread_local auto x_xy = Endomorphism(CWord("xy"), CWord("y"));
+      thread_local auto x_y = Endomorphism(CWord("y"), CWord("x"));
+      thread_local auto y_Y = Endomorphism(CWord("x"), CWord("Y"));
+
+      pushClass(ident, ACClass::AutKind::Ident);
+      pushClass(x_xy, ACClass::AutKind::x_xy);
+      pushClass(x_y, ACClass::AutKind::x_y);
+      pushClass(y_Y, ACClass::AutKind::y_Y);
+    } else {
+      automorphic_classes.emplace_back(Endomorphism("x", "y"), step_info.class_id);
+    }
+
+
+    std::vector<std::pair<CWordTuple<2>, ACClasses::ClassId>> new_tuples;
+    new_tuples.reserve(harvested_words.size() * automorphic_classes.size());
 
     //state_dump may be used without locks
     auto& state_dump = *state_->data.dump;
@@ -191,18 +242,36 @@ struct ACWorker {
       if (word == u) {
         continue;
       }
-      new_tuples.emplace_back(CWordTuple<2>{v, word});
-      stats->ConjNormalizeClick();
-      new_tuples.back() = ConjugationInverseFlipNormalForm(new_tuples.back());
-      stats->ConjNormalizeClick();
+
+      for (auto&& aut_class : automorphic_classes) {
+        try {
+          auto image = Apply(aut_class.first, CWordTuple<2>{v, word});
+
+          stats->ConjNormalizeClick();
+          image = ConjugationInverseFlipNormalForm(image);
+          stats->ConjNormalizeClick();
+
+          if (image[1].size() > harvest_limit) {
+            continue;
+          }
+
+          assert(image[0].size() <= harvest_limit && "First word must always be shorter than second");
+
+          new_tuples.emplace_back(image, aut_class.second);
+        } catch(const std::length_error&) {
+          continue;
+        }
+      }
     }
 
-    state_dump.DumpHarvestEdges(uv_pair, new_tuples, is_flipped);
+    // looks like dumping graph is not possible anyway
+    // so I am going to deprecate this API
+    // state_dump.DumpHarvestEdges(uv_pair, new_tuples, is_flipped);
 
     if (use_automorphisms) {
       for (auto& new_tuple : new_tuples) {
         stats->WhiteheadReduceClick();
-        auto normalized_tuple = WhitheadMinLengthTuple(new_tuple);
+        auto normalized_tuple = WhitheadMinLengthTuple(new_tuple.first);
         stats->WhiteheadReduceClick();
         stats->ConjNormalizeClick();
         normalized_tuple = ConjugationInverseFlipNormalForm(normalized_tuple);
@@ -213,9 +282,9 @@ struct ACWorker {
           return;
         }
 
-        if (normalized_tuple != new_tuple) {
-          state_dump.DumpAutomorphEdge(new_tuple, normalized_tuple, false);
-          new_tuple = normalized_tuple;
+        if (normalized_tuple != new_tuple.first) {
+          state_dump.DumpAutomorphEdge(new_tuple.first, normalized_tuple, false);
+          new_tuple.first = normalized_tuple;
         }
       }
     }
@@ -229,10 +298,12 @@ struct ACWorker {
     stats->SetUniquePairs(static_cast<size_t>(tuples_end - new_tuple));
 
     while (new_tuple != tuples_end) {
-      auto exists = step_info.index.find(*new_tuple);
+      auto exists = step_info.index.find(new_tuple->first);
       if (exists != step_info.index.end()) {
         //we merge two ac classes
-        step_data->classes_to_merge.emplace_back(exists->second);
+        if (exists->second != new_tuple->second) {
+          step_data->classes_to_merge.emplace_back(exists->second, new_tuple->second);
+        }
       } else {
         //we move this pair to the ones which will be kept
         *new_tuples_keep = *new_tuple;
@@ -243,14 +314,14 @@ struct ACWorker {
 
     new_tuples.erase(new_tuples_keep, new_tuples.end());
 
-    for (auto&& tuple : new_tuples) {
-      if (use_automorphisms) {
+    if (use_automorphisms) {
+      for (auto&& tuple : new_tuples) {
         stats->WhiteheadExtendClick();
-        std::set<CWordTuple<2>> minimal_orbit = {tuple};
+        std::set<CWordTuple<2>> minimal_orbit = {tuple.first};
         CompleteWithShortestAutoImages(&minimal_orbit);
         stats->WhiteheadExtendClick();
 
-        auto min_tuple = tuple;
+        auto min_tuple = tuple.first;
 
         for (auto image : minimal_orbit) {
           stats->ConjNormalizeClick();
@@ -263,7 +334,7 @@ struct ACWorker {
           }
 
           //all pairs in the min orbit are added to index so that later we could check fast a non-auto-normalized pair
-          step_data->pairs_to_add.push_back(image);
+          step_data->pairs_to_add.emplace_back(image, tuple.second);
 
           if (image < min_tuple) {
             min_tuple = image;
@@ -272,9 +343,9 @@ struct ACWorker {
 
         state_dump.DumpAutomorphEdges(min_tuple, minimal_orbit, true);
         step_data->pairs_to_process.push_back(min_tuple);
-      } else {
-        step_data->pairs_to_process.push_back(tuple);
       }
+    } else {
+      step_data->pairs_to_add.insert(step_data->pairs_to_add.end(), new_tuples.begin(), new_tuples.end());
     }
 
     stats->SetAutOrbitSize(step_data->pairs_to_process.empty() ? 0 : step_data->pairs_to_add.size() / step_data->pairs_to_process.size());
@@ -423,11 +494,11 @@ struct ACWorker {
       auto& ac_index = pair_info.index_writer;
 
       for (auto&& other_class : step_data.classes_to_merge) {
-        ac_index.Merge(pair_info.class_id, other_class);
+        ac_index.Merge(other_class.first, other_class.second);
       }
 
-      for (auto&& to_add : (pair_info.use_automorphisms ? step_data.pairs_to_add : step_data.pairs_to_process)) {
-        ac_index.Push(to_add, pair_info.class_id);
+      for (auto&& to_add : step_data.pairs_to_add) {
+        ac_index.Push(to_add.first, to_add.second);
       }
 
       ProcessedStats(pair);
@@ -436,8 +507,17 @@ struct ACWorker {
     //schedule obtained words
     {
       auto& to_process = state_->data.queue;
-      for (auto&& pair_to_process : step_data.pairs_to_process) {
-        to_process->Push(pair_to_process, pair_info.use_automorphisms);
+      if (step_data.pairs_to_process.empty()) {
+        // happens when we work with non-automorphic case
+        for (auto&& p : step_data.pairs_to_add) {
+          assert(!pair_info.use_automorphisms);
+          to_process->Push(p.first, false);
+        }
+      } else {
+        assert(pair_info.use_automorphisms);
+        for (auto&& pair_to_process : step_data.pairs_to_process) {
+          to_process->Push(pair_to_process, true);
+        }
       }
     }
   }
