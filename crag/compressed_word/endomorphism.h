@@ -13,6 +13,9 @@ class Endomorphism
 {
  public:
   constexpr CWord Apply(CWord w) const {
+    if (IsIdent()) {
+      return w;
+    }
     CWord result;
     while (!w.Empty()) {
       result.PushBack(mapping_[w.GetFront().AsInt()]);
@@ -36,6 +39,15 @@ class Endomorphism
     for (auto i = 0; i < CWord::kAlphabetSize; ++i) {
       mapping_[2*i + 1].Invert();
     }
+  }
+
+  constexpr bool IsIdent() const {
+    return mapping_[0] == CWord(1, XYLetter('x')) && mapping_[1] == CWord(1, XYLetter('y'));
+  }
+
+  //! Returns this ∘ psi
+  Endomorphism ComposeWith(Endomorphism psi) const {
+    return Endomorphism(psi.Apply(mapping_[0]), psi.Apply(mapping_[2]));
   }
 
  private:
