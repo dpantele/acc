@@ -27,6 +27,7 @@ struct WorkersSharedState {
 
   std::atomic<size_t> processed_count{0u};
   std::atomic<std::chrono::system_clock::time_point> last_report{std::chrono::system_clock::now()};
+  std::atomic<std::chrono::system_clock::time_point> last_full_report{std::chrono::system_clock::now()};
 };
 
 static Endomorphism ToIdentityImageMapping(const ACClass* c) {
@@ -353,11 +354,18 @@ struct ACWorker {
   };
 
   void ProcessedStats(const ACPair& p) {
-    state_->processed_count.fetch_add(1, std::memory_order_release);
+    state_->processed_count.fetch_add(1, std::memory_order_relaxed);
     auto time = std::chrono::system_clock::now();
-    auto last_report = state_->last_report.load(std::memory_order_acquire);
+    auto last_report = state_->last_report.load(std::memory_order_relaxed);
     if (time - last_report > std::chrono::seconds(5)
-        && state_->last_report.compare_exchange_strong(last_report, time, std::memory_order_release)) {
+        && state_->last_report.compare_exchange_strong(last_report, time, std::memory_order_relaxed)) {
+
+      bool full_report = false;
+
+      if (time - state_->last_full_report.load(std::memory_order_relaxed) > std::chrono::minutes(1)) {
+        state_->last_full_report.store(time, std::memory_order_relaxed);
+        full_report = true;
+      }
 
       fmt::MemoryWriter new_stats;
 
@@ -388,6 +396,14 @@ struct ACWorker {
       } else {
         for (auto&& length : lengths_counts) {
           new_stats.write("Length {}: {}\n", length.first, length.second);
+          if (full_report && length.second < 50) {
+            for (auto&& c : *ac_classes) {
+              if (c.IsPrimary() && c.minimal_[0].size() + c.minimal_[1].size() == length.first) {
+                c.DescribeForLog(&new_stats);
+                new_stats.write("\n");
+              }
+            }
+          }
         }
       }
 

@@ -10,7 +10,7 @@
 
 
 void ACClass::DescribeForLog(std::ostream* out) const {
-  *out << "Class " << initial_ << "(";
+  *out << id_ << ": " << initial_ << "(";
   switch(init_kind()) {
     case AutKind::Ident:
       *out << "Id";
@@ -25,12 +25,20 @@ void ACClass::DescribeForLog(std::ostream* out) const {
       *out << "y->Y";
       break;
   }
-  *out << "): " << minimal_;
-  *out << ", " << aut_types_;
+  *out << "): ";
+  if (merged_with_ != id_) {
+    *out << "=> " << merged_with_;
+  } else {
+    *out << minimal_;
+
+    if (id_ % 4 == 0) {
+      *out << ", " << aut_types_;
+    }
+  }
 }
 
 void ACClass::DescribeForLog(fmt::MemoryWriter *out) const {
-  out->write("Class {}(", initial_);
+  out->write("{}: {}(", id_, initial_);
   switch (init_kind()) {
     case AutKind::Ident:
       out->write("Id");
@@ -45,7 +53,14 @@ void ACClass::DescribeForLog(fmt::MemoryWriter *out) const {
       *out << "y->Y";
       break;
   }
-  out->write("): {}, {}", minimal_, aut_types_);
+
+  if (id_ != merged_with_) {
+    out->write("): => ", merged_with_);
+  } else if (id_ % 4 == 0) {
+    out->write("): {}, {}", minimal_, aut_types_);
+  } else {
+    out->write("): {}", minimal_);
+  }
 }
 
 ACClass::ACClass(size_t id, ACPair initial, ACPair image, AutKind kind, ACStateDump* logger)

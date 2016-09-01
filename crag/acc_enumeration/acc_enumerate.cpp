@@ -266,6 +266,22 @@ void EnumerateAC(path config_path) {
 
   Process(data);
   to_process.Terminate();
+
+  std::clog << "Full report:\n";
+  auto ac_classes = ac_index.GetCurrentACClasses();
+  for (auto&& c : *ac_classes) {
+    c.DescribeForLog(&std::clog);
+    std::clog << "\n";
+  }
+
+  std::clog << "Primary report:\n";
+  for (auto&& c : *ac_classes) {
+    if (c.IsPrimary()) {
+      c.DescribeForLog(&std::clog);
+      std::clog << "\n";
+    }
+  }
+
   std::clog << "Enumeration stopped, wait till dump is synchronized" << std::endl;
 
   //getting some stats
