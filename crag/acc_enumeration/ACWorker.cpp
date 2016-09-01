@@ -256,6 +256,12 @@ struct ACWorker {
             continue;
           }
 
+          if (image[0].size() < 4
+              || image[0].size() + image[1].size() < 13) {
+            step_data->got_trivial_class = true;
+            return;
+          }
+
           assert(image[0].size() <= harvest_limit && "First word must always be shorter than second");
 
           new_tuples.emplace_back(image, aut_class.second);
@@ -503,7 +509,12 @@ struct ACWorker {
     //and finally we write the results
     {
       if (step_data.got_trivial_class) {
-        pair_info.index_writer.Merge(pair_info.class_id, state_->trivial_class);
+        auto identity_class = ACClasses::IdentityImageFor(pair_info.class_id);
+        pair_info.index_writer.Merge(identity_class, state_->trivial_class);
+        pair_info.index_writer.Merge(identity_class + 1, state_->trivial_class);
+        pair_info.index_writer.Merge(identity_class + 2, state_->trivial_class);
+        pair_info.index_writer.Merge(identity_class + 3, state_->trivial_class);
+
         return ProcessedStats(pair);
       }
 
