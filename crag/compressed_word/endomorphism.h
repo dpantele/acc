@@ -42,7 +42,7 @@ class Endomorphism
   }
 
   constexpr bool IsIdent() const {
-    return mapping_[0] == CWord(1, XYLetter('x')) && mapping_[1] == CWord(1, XYLetter('y'));
+    return mapping_[0] == CWord(1, XYLetter('x')) && mapping_[2] == CWord(1, XYLetter('y'));
   }
 
   //! Returns this ∘ psi
