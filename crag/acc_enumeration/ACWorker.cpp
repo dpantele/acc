@@ -30,8 +30,8 @@ struct WorkersSharedState {
   std::atomic<std::chrono::system_clock::time_point> last_full_report{std::chrono::system_clock::now()};
 };
 
-static Endomorphism ToIdentityImageMapping(const ACClass* c) {
-  switch (c->init_kind()) {
+static Endomorphism ToIdentityImageMapping(const ACClass::AutKind k) {
+  switch (k) {
     case ACClass::AutKind::Ident:
       return Endomorphism("x", "y");
     case ACClass::AutKind::x_xy:
@@ -41,6 +41,11 @@ static Endomorphism ToIdentityImageMapping(const ACClass* c) {
     case ACClass::AutKind::y_Y:
       return Endomorphism("x", "Y");
   }
+  assert(false);
+}
+
+static Endomorphism ToIdentityImageMapping(const ACClass* c) {
+  return ToIdentityImageMapping(c->init_kind());
   assert(false);
 }
 
@@ -201,11 +206,12 @@ struct ACWorker {
       // find all automorphic_classes
       const auto& classes = *step_info.classes;
       auto original_class = classes.at(step_info.class_id);
-      auto identity_image = classes.at(classes.IdentityImageFor(step_info.class_id));
+      auto identity_image_id = classes.IdentityImageFor(step_info.class_id);
+      auto identity_image_class = classes.at(identity_image_id);
       auto to_identity_mapping = ToIdentityImageMapping(original_class);
 
       auto pushClass = [&](const Endomorphism& e, ACClass::AutKind type) {
-        if (identity_image->AllowsAutomorphism(type)) {
+        if (identity_image_class->AllowsAutomorphism(type)) {
           // the identity class is always considered primary
           // so if original_class is already merged with identity_image
           // then we add the new pairs to identity_image
@@ -214,7 +220,7 @@ struct ACWorker {
         }
 
         automorphic_classes.emplace_back(to_identity_mapping.ComposeWith(e),
-                                         identity_image->id_ + static_cast<size_t>(type));
+                                         classes.at(identity_image_id + static_cast<size_t>(type))->id_);
       };
 
       thread_local auto ident = Endomorphism(CWord("x"), CWord("y"));
@@ -229,7 +235,6 @@ struct ACWorker {
     } else {
       automorphic_classes.emplace_back(Endomorphism("x", "y"), step_info.class_id);
     }
-
 
     std::vector<std::pair<CWordTuple<2>, ACClasses::ClassId>> new_tuples;
     new_tuples.reserve(harvested_words.size() * automorphic_classes.size());
@@ -335,7 +340,8 @@ struct ACWorker {
           image = ConjugationInverseFlipNormalForm(image);
           stats->ConjNormalizeClick();
 
-          if (image[0].size() < 4) {
+          if (image[0].size() < 4
+              || image.length() < 13) {
             step_data->got_trivial_class = true;
             return;
           }
@@ -361,7 +367,6 @@ struct ACWorker {
   };
 
   void ProcessedStats(const ACPair& p) {
-    state_->processed_count.fetch_add(1, std::memory_order_relaxed);
     auto time = std::chrono::system_clock::now();
     auto last_report = state_->last_report.load(std::memory_order_relaxed);
     if (time - last_report > std::chrono::seconds(5)

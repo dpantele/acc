@@ -29,11 +29,7 @@ void ACClass::DescribeForLog(std::ostream* out) const {
   if (merged_with_ != id_) {
     *out << "=> " << merged_with_;
   } else {
-    *out << minimal_;
-
-    if (id_ % 4 == 0) {
-      *out << ", " << aut_types_;
-    }
+    *out << minimal_ << ", " << aut_types_;
   }
 }
 
@@ -56,16 +52,14 @@ void ACClass::DescribeForLog(fmt::MemoryWriter *out) const {
 
   if (id_ != merged_with_) {
     out->write("): => ", merged_with_);
-  } else if (id_ % 4 == 0) {
-    out->write("): {}, {}", minimal_, aut_types_);
   } else {
-    out->write("): {}", minimal_);
+    out->write("): {}, {}", minimal_, aut_types_);
   }
 }
 
 ACClass::ACClass(size_t id, ACPair initial, ACPair image, AutKind kind, ACStateDump* logger)
   : initial_(std::move(initial))
-  , aut_types_(1u << static_cast<int>(kind))
+  , aut_types_(1u)
   , minimal_(crag::ConjugationInverseFlipNormalForm(image))
   , merged_with_(id)
   , id_(id)

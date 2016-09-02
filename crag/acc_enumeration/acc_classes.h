@@ -85,10 +85,10 @@ class ACClasses {
       if (c.id_ % 4 == 3) {
         auto& original = classes_.at(c.id_ - 3);
         auto& canonical = classes_.at(original.merged_with_);
-        for (auto i = 1; i < 4; ++i) {
+        for (auto i = 1u; i < 4; ++i) {
           auto& image = classes_.at(original.id_ + i);
           if (original.merged_with_ == image.merged_with_) {
-            // make sure it is allowed for canonical
+            // make sure it is allowed for the canonical
             canonical.aut_types_.set(i);
           }
         }

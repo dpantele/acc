@@ -83,11 +83,7 @@ void ACClasses::Merge(ACClasses::ClassId first_id, ACClasses::ClassId second_id)
     first->minimal_ = second->minimal_;
   }
 
-  if (ACClasses::IdentityImageFor(first->id_) == ACClasses::IdentityImageFor(second->id_ / 4)) {
-    // same initial
-    first->aut_types_ |= second->aut_types_;
-  }
-
+  first->aut_types_ |= second->aut_types_;
   first->pairs_count_ += second->pairs_count_;
 
   logger_->Merge(*first, *second);
