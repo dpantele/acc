@@ -146,7 +146,7 @@ struct ACWorker {
   }
 
   struct ProcessStepData {
-    std::vector<std::pair<ACClasses::ClassId, ACClasses::ClassId>> classes_to_merge;
+    std::set<std::pair<ACClasses::ClassId, ACClasses::ClassId>> classes_to_merge;
     std::vector<std::pair<ACPair, ACClasses::ClassId>> pairs_to_add;
     std::vector<ACPair> pairs_to_process;
 
@@ -318,7 +318,11 @@ struct ACWorker {
       if (exists != step_info.index.end()) {
         //we merge two ac classes
         if (exists->second != new_tuple->second) {
-          step_data->classes_to_merge.emplace_back(exists->second, new_tuple->second);
+          auto first = step_info.classes->at(exists->second)->id_;
+          auto second = step_info.classes->at(new_tuple->second)->id_;
+          if (first != second) {
+            step_data->classes_to_merge.emplace(first, second);
+          }
         }
       } else {
         //we move this pair to the ones which will be kept
