@@ -211,7 +211,7 @@ struct ACWorker {
       auto to_identity_mapping = ToIdentityImageMapping(original_class);
 
       auto pushClass = [&](const Endomorphism& e, ACClass::AutKind type) {
-        if (identity_image_class->AllowsAutomorphism(type)) {
+        if (type != ACClass::AutKind::Ident && identity_image_class->AllowsAutomorphism(type)) {
           // the identity class is always considered primary
           // so if original_class is already merged with identity_image
           // then we add the new pairs to identity_image
