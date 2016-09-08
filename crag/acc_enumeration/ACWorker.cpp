@@ -120,7 +120,7 @@ struct ACWorker {
     }
   }
 
-  bool AutMinIsInIndex(const ACPair& pair, const ACIndex::DataReadHandle& index) {
+  boost::optional<ACClasses::ClassId> AutMinClass(const ACPair& pair, const ACIndex::DataReadHandle& index) {
     //first we find some pair of minimal length
     auto reduced_pair = WhitheadMinLengthTuple(pair);
 
@@ -130,15 +130,19 @@ struct ACWorker {
     }
 
     if (reduced_pair == pair) {
-      return false;
+      return boost::none;
     }
 
-    if (index.count(reduced_pair) != 0) {
+    auto in_index = index.find(reduced_pair);
+
+    if (in_index != index.end()) {
       //reduced pair was or will be harvested
+      //so we will only need to merge classes
       state_->data.dump->DumpAutomorphEdge(pair, reduced_pair, false);
-      return true;
+      return in_index->second;
     }
-    return false;
+
+    return boost::none;
   }
 
   struct ProcessStepData {
@@ -489,9 +493,13 @@ struct ACWorker {
       pair_info.index_writer.Merge(pair_info.class_id, state_->trivial_class);
       return ProcessedStats(pair);
     }
-    if (pair_info.use_automorphisms && !was_aut_normalized
-        && AutMinIsInIndex(pair, pair_info.index)) {
-      return ProcessedStats(pair);
+
+    if (pair_info.use_automorphisms && !was_aut_normalized) {
+      auto min_class = AutMinClass(pair, pair_info.index);
+      if (min_class) {
+        pair_info.index_writer.Merge(min_class.value(), pair_info.class_id);
+        return ProcessedStats(pair);
+      }
     }
 
     // Harvest the pair and its flip
