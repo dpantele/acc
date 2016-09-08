@@ -367,6 +367,7 @@ struct ACWorker {
   };
 
   void ProcessedStats(const ACPair& p) {
+    state_->processed_count.fetch_add(1, std::memory_order_relaxed);
     auto time = std::chrono::system_clock::now();
     auto last_report = state_->last_report.load(std::memory_order_relaxed);
     if (time - last_report > std::chrono::seconds(5)
