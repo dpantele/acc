@@ -320,6 +320,13 @@ struct ACWorker {
         if (exists->second != new_tuple->second) {
           auto first = step_info.classes->at(exists->second)->id_;
           auto second = step_info.classes->at(new_tuple->second)->id_;
+
+          if (first == state_->trivial_class
+              || second == state_->trivial_class) {
+            step_data->got_trivial_class = true;
+            return;
+          }
+
           if (first != second) {
             step_data->classes_to_merge.emplace(first, second);
           }
