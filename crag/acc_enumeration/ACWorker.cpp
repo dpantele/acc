@@ -496,12 +496,21 @@ struct ACWorker {
   void Process(ACPair pair, bool was_aut_normalized) {
     auto pair_info = GetPairInfo(pair);
 
+    auto MarkAsTrivial = [&]() {
+      auto identity_class = ACClasses::IdentityImageFor(pair_info.class_id);
+
+      pair_info.index_writer.Merge(pair_info.classes->at(identity_class)->id_, state_->trivial_class);
+      pair_info.index_writer.Merge(pair_info.classes->at(identity_class + 1)->id_, state_->trivial_class);
+      pair_info.index_writer.Merge(pair_info.classes->at(identity_class + 2)->id_, state_->trivial_class);
+      pair_info.index_writer.Merge(pair_info.classes->at(identity_class + 3)->id_, state_->trivial_class);
+    };
+
     if (pair_info.is_trivial) {
+      MarkAsTrivial();
       return ProcessedStats(pair);
     }
     if (Length(pair) < 13 || pair[0].size() < 4) {
       // pair is certainly trivial
-      pair_info.index_writer.Merge(pair_info.class_id, state_->trivial_class);
       return ProcessedStats(pair);
     }
 
@@ -535,12 +544,7 @@ struct ACWorker {
     //and finally we write the results
     {
       if (step_data.got_trivial_class) {
-        auto identity_class = ACClasses::IdentityImageFor(pair_info.class_id);
-        pair_info.index_writer.Merge(identity_class, state_->trivial_class);
-        pair_info.index_writer.Merge(identity_class + 1, state_->trivial_class);
-        pair_info.index_writer.Merge(identity_class + 2, state_->trivial_class);
-        pair_info.index_writer.Merge(identity_class + 3, state_->trivial_class);
-
+        MarkAsTrivial();
         return ProcessedStats(pair);
       }
 
