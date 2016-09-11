@@ -76,23 +76,15 @@ ACIndex::ACIndex(const Config& c, std::shared_ptr<ACClasses> initial_classes)
         new_classes = GetCurrentACClasses()->Clone();
       }
 
-      // first we merge-sort new batches
+      // first we sort new batches
       std::vector<IndexValues> new_elements;
       new_elements.reserve(batches_size);
       for (auto&& batch : new_batches) {
-
-        // register adding pair to a class
-        for (auto&& pair : batch) {
-          new_classes->AddPair(pair.second, pair.first);
-        }
-
-        auto merged_end = new_elements.end();
-        new_elements.insert(merged_end, batch.begin(), batch.end());
-        std::inplace_merge(new_elements.begin(), merged_end, new_elements.end(), Storage::KeyLess);
+        new_elements.insert(new_elements.end(), batch.begin(), batch.end());
       }
-
       new_batches.clear();
 
+      std::sort(new_elements.begin(), new_elements.end(), Storage::KeyLess);
       auto new_version = std::make_shared<Storage>(&versions_count_);
 
       auto& new_index = new_version->index_;
@@ -109,13 +101,14 @@ ACIndex::ACIndex(const Config& c, std::shared_ptr<ACClasses> initial_classes)
           // 'remove' current and merge classes
           new_classes->Merge(last_unique->second, current->second);
         } else {
+          // add current to the class
+          new_classes->AddPair(current->second, current->first);
           ++last_unique;
           *last_unique = *current;
         }
       }
 
-      ++last_unique;
-      new_index.erase(last_unique, new_index.end());
+      new_index.erase(std::next(last_unique), new_index.end());
 
       std::atomic_store_explicit(&current_version_, std::move(new_version), std::memory_order_release);
       StoreNewClasses();
