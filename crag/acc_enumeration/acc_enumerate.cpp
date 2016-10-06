@@ -165,7 +165,8 @@ void EnumerateAC(path config_path) {
   initial_classes_version->RestoreMerges();
   initial_classes_version->RestoreMinimums();
 
-  ACIndex ac_index(config, initial_classes_version);
+  ACPairProcessQueue to_process(config, &state_dump);
+  ACIndex ac_index(config, initial_classes_version, &to_process);
 
   //maybe restore the index
   if (fs::exists(config.pairs_classes_in())) {
@@ -184,7 +185,7 @@ void EnumerateAC(path config_path) {
       auto pair = ACStateDump::LoadPair(next_line.substr(0, split));
       auto ac_class = initial_classes_version->at(std::stoul(next_line.substr(split + 1)));
 
-      initial_batch.Push(pair, ac_class->id_);
+      initial_batch.Push(pair, false, ac_class->id_);
       ++expected_index_size;
       initial_classes_version->AddPair(ac_class->id_, pair);
     }
@@ -197,8 +198,6 @@ void EnumerateAC(path config_path) {
     initial_classes_version->InitACIndex(&ac_index);
   }
   initial_classes_version.reset();
-
-  ACPairProcessQueue to_process(config, &state_dump);
 
   if (fs::exists(config.pairs_queue_in())) {
     // we just restore the queue

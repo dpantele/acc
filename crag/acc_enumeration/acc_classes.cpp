@@ -113,7 +113,7 @@ void ACClasses::InitACIndex(ACIndex* index) {
   auto initial_batch = index->NewBatch();
 
   for (auto&& p : pairs_classes) {
-    initial_batch.Push(p.first, p.second->id_);
+    initial_batch.Push(p.first, false, p.second->id_);
   }
 
   initial_batch.Execute();

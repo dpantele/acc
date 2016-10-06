@@ -4,10 +4,11 @@
 
 #include "ACIndex.h"
 
-ACIndex::ACIndex(const Config& c, std::shared_ptr<ACClasses> initial_classes)
+ACIndex::ACIndex(const Config& c, std::shared_ptr<ACClasses> initial_classes, ACPairProcessQueue* pairs_queue)
  : current_version_(std::make_shared<Storage>(&versions_count_))
  , current_classes_version_(std::move(initial_classes))
  , pairs_to_add_(c.workers_count_ * 2)
+ , pairs_queue_(pairs_queue)
 {
   auto initial_semaphore = versions_count_.tryWait();
   assert(initial_semaphore);
@@ -77,38 +78,49 @@ ACIndex::ACIndex(const Config& c, std::shared_ptr<ACClasses> initial_classes)
       }
 
       // first we sort new batches
-      std::vector<IndexValues> new_elements;
+      std::vector<std::tuple<ACPair, bool, ACClasses::ClassId>> new_elements;
       new_elements.reserve(batches_size);
       for (auto&& batch : new_batches) {
         new_elements.insert(new_elements.end(), batch.begin(), batch.end());
       }
       new_batches.clear();
 
-      std::sort(new_elements.begin(), new_elements.end(), Storage::KeyLess);
+      std::sort(new_elements.begin(), new_elements.end(),
+                [](const auto& a, const auto& b) { return std::get<ACPair>(a) < std::get<ACPair>(b); });
       auto new_version = std::make_shared<Storage>(&versions_count_);
 
       auto& new_index = new_version->index_;
       new_index.reserve(current_version_->index_.size() + batches_size);
-      std::merge(current_version_->index_.begin(), current_version_->index_.end(),
-          new_elements.begin(), new_elements.end(), std::back_inserter(new_index), Storage::KeyLess);
 
-      auto last_unique = new_index.begin();
+      auto& current_index = current_version_->index_;
+      auto current_new = new_elements.begin();
 
-      assert(!new_index.empty());
-
-      for(auto current = std::next(new_index.begin()); current != new_index.end(); ++current) {
-        if (current->first == last_unique->first) {
-          // 'remove' current and merge classes
-          new_classes->Merge(last_unique->second, current->second);
+      auto current_exists = current_index.begin();
+      while (current_exists != current_index.end()) {
+        if (current_new == new_elements.end()) {
+          std::copy(current_exists, current_index.end(), std::back_inserter(new_index));
+          break;
+        }
+        if (std::get<ACPair>(*current_new) < std::get<ACPair>(*current_exists)) {
+          // should insert current_new into the index
+          // but we also need to check if it is different from the previous element
+          if (!current_index.empty()
+              && std::get<ACPair>(*current_new) == std::get<ACPair>(current_index.back())) {
+            // we got a duplicate
+            new_classes->Merge(std::get<ACClasses::ClassId>(*current_new),
+                               std::get<ACClasses::ClassId>(current_index.back()));
+          } else {
+            // new unique pair
+            new_index.emplace_back(std::get<ACPair>(*current_new), std::get<ACClasses::ClassId>(*current_new));
+            new_classes->AddPair(std::get<ACClasses::ClassId>(*current_new), std::get<ACPair>(*current_new));
+            pairs_queue_->Push(std::get<ACPair>(*current_new), std::get<bool>(*current_new));
+          }
         } else {
-          // add current to the class
-          new_classes->AddPair(current->second, current->first);
-          ++last_unique;
-          *last_unique = *current;
+          // should insert the old element into the index
+          // it is always unique
+          new_index.emplace_back(std::get<ACPair>(*current_exists), std::get<ACClasses::ClassId>(*current_exists));
         }
       }
-
-      new_index.erase(std::next(last_unique), new_index.end());
 
       std::atomic_store_explicit(&current_version_, std::move(new_version), std::memory_order_release);
       StoreNewClasses();

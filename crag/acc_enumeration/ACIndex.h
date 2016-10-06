@@ -13,12 +13,13 @@
 #include "acc_class.h"
 #include "config.h"
 #include "acc_classes.h"
+#include "ACPairProcessQueue.h"
 
 //! Thread-safe version of an index which adds multiple items at once
 class ACIndex {
   struct Storage;
  public:
-  ACIndex(const Config &c, std::shared_ptr<ACClasses> initial_classes);
+  ACIndex(const Config &c, std::shared_ptr<ACClasses> initial_classes, ACPairProcessQueue* pairs_queue);
   ~ACIndex();
 
   // just to be safe - we don't need the index to be copyable
@@ -70,7 +71,7 @@ class ACIndex {
   using IndexValues = typename std::remove_reference<decltype(*std::declval<Storage>().index_.begin())>::type;
   using ToMerge = std::pair<ACClasses::ClassId, ACClasses::ClassId>;
 
-  using BatchStorage = std::pair<std::deque<IndexValues>, std::vector<ToMerge>>;
+  using BatchStorage = std::pair<std::deque<std::tuple<ACPair, bool, ACClasses::ClassId>>, std::vector<ToMerge>>;
   using BatchesQueue = crag::multithreading::SharedQueue<BatchStorage>;
  public:
   class AddBatch {
@@ -78,8 +79,12 @@ class ACIndex {
     void Execute() {
       if (!to_add_.empty() || !to_merge_.empty()) {
         if (!sorted_and_unique_) {
-          std::stable_sort(to_add_.begin(), to_add_.end(), Storage::KeyLess);
-          to_add_.erase(std::unique(to_add_.begin(), to_add_.end(), Storage::KeyEq), to_add_.end());
+          std::stable_sort(to_add_.begin(), to_add_.end(),
+                           [](const auto& a, const auto& b) { return std::get<ACPair>(a) < std::get<ACPair>(b); });
+          to_add_.erase(std::unique(to_add_.begin(), to_add_.end(),
+                                    [](const auto& a, const auto& b) {
+                                      return std::get<ACPair>(a) == std::get<ACPair>(b);
+                                    }), to_add_.end());
         }
         commit_to_->Push(BatchStorage(std::piecewise_construct, std::make_tuple(std::move(to_add_)),
                                       std::make_tuple(std::move(to_merge_))));
@@ -95,12 +100,12 @@ class ACIndex {
     AddBatch(BatchesQueue *commit_to)
         : commit_to_(commit_to) {}
 
-    void Push(ACPair p, ACClasses::ClassId c) {
-      if (!to_add_.empty() && to_add_.back().first >= p) {
+    void Push(ACPair p, bool is_aut_normalized, ACClasses::ClassId c) {
+      if (!to_add_.empty() && std::get<ACPair>(to_add_.back()) >= p) {
         sorted_and_unique_ = false;
       }
 
-      to_add_.emplace_back(std::move(p), c);
+      to_add_.emplace_back(std::move(p), is_aut_normalized, c);
     }
 
     void Merge(ACClasses::ClassId first, ACClasses::ClassId second) {
@@ -110,7 +115,7 @@ class ACIndex {
     }
    private:
     bool sorted_and_unique_ = true;
-    std::deque<IndexValues> to_add_;
+    std::deque<std::tuple<ACPair, bool, ACClasses::ClassId>> to_add_;
     std::vector<std::pair<ACClasses::ClassId, ACClasses::ClassId>> to_merge_;
     BatchesQueue *commit_to_;
   };
@@ -162,13 +167,15 @@ class ACIndex {
 
  private:
   std::shared_ptr<Storage> current_version_; // shared between all threads
-  std::shared_ptr<const ACClasses> current_classes_version_; // shared between all threas as well
+  std::shared_ptr<const ACClasses> current_classes_version_; // shared between all threads as well
 
   BatchesQueue pairs_to_add_;
   crag::multithreading::DefaultSemaphoreType
       versions_count_{2}; // don't allow more than two versions exist to limit memory usage
 
   std::thread index_updater_;
+
+  ACPairProcessQueue* pairs_queue_; // only used by index updater
 };
 
 #endif //ACC_ACINDEX_H
